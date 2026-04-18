@@ -978,23 +978,109 @@ function printPlan() {
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   if (isMobile) {
+    // ===== MOBILE: card-based layout อ่านง่ายบนจอแคบ =====
+    const weekCards = week.map(d => `
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:10px;">
+        <div style="font-weight:700; font-size:14px; color:#0f172a; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">📅 วัน${d.day}</div>
+        <div style="margin-bottom:6px;"><span style="font-size:11px; color:#64748b; display:block;">🌅 เช้า</span><span style="font-size:13px;">${d.breakfast||'-'}</span></div>
+        <div style="margin-bottom:6px;"><span style="font-size:11px; color:#64748b; display:block;">🍛 กลางวัน</span><span style="font-size:13px;">${d.lunch||'-'}</span></div>
+        <div style="margin-bottom:${d.snack?'6px':'0'};"><span style="font-size:11px; color:#64748b; display:block;">🌙 เย็น</span><span style="font-size:13px;">${d.dinner||'-'}</span></div>
+        ${d.snack ? `<div><span style="font-size:11px; color:#64748b; display:block;">🍎 ว่าง</span><span style="font-size:13px;">${d.snack}</span></div>` : ''}
+      </div>`).join('');
+
+    const mobileContent = `
+      <div style="border-bottom:2px solid #0f172a; padding-bottom:10px; margin-bottom:14px;">
+        <div style="font-size:18px; font-weight:700; color:#0f172a;">🏥 แผนโภชนาการผู้ป่วย</div>
+        <div style="font-size:12px; color:#64748b; margin-top:4px;">จัดทำโดย: ${user} | วันที่: ${date}</div>
+        <div style="font-size:12px; color:#334155; margin-top:2px;">HN: <b>${hn}</b> | Ward: <b>${ward}</b></div>
+      </div>
+
+      <div style="background:#f8fafc; border-radius:10px; padding:12px; margin-bottom:14px; border:1px solid #e2e8f0; font-size:13px; line-height:2;">
+        <div>อายุ <b>${age} ปี</b> &nbsp;|&nbsp; น้ำหนัก <b>${w} kg</b> &nbsp;|&nbsp; ส่วนสูง <b>${h} cm</b></div>
+        <div>BMI <b>${r.bmi?r.bmi.toFixed(1):'-'}</b> &nbsp;(<span style="color:#991b1b;">${r.diagnosis||'-'}</span>)</div>
+        <div>IBW <b>${r.ibw||'-'} kg</b> &nbsp;|&nbsp; น้ำหนักที่ใช้ <b>${r.usedWeight?r.usedWeight.toFixed(1):'-'} kg</b></div>
+        <div style="font-size:11px; color:#64748b;">(${r.weightType||'-'})</div>
+        ${r.riskOverfeeding ? '<div style="color:#dc2626; font-weight:700; margin-top:4px;">⚠️ Risk Overfeeding — ใช้ AdjBW</div>' : ''}
+      </div>
+
+      ${r.clinicalNote ? `<div style="margin-bottom:14px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px; font-size:12px; color:#0369a1; line-height:1.6;">🩺 <b>Clinical Note:</b> ${r.clinicalNote}</div>` : ''}
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;">
+        <div style="border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px; padding:10px; text-align:center;">
+          <div style="font-size:11px; color:#1e40af;">พลังงาน</div>
+          <div style="font-size:22px; font-weight:700; color:#1d4ed8;">${r.kcal||'-'}</div>
+          <div style="font-size:11px; color:#64748b;">kcal/วัน (${r.kcalFactor||'-'} kcal/kg)</div>
+          ${(r.kcalRangeLow&&r.kcalRangeHigh&&r.kcalRangeLow!==r.kcalRangeHigh) ? `<div style="font-size:11px; color:#3b82f6;">range: ${r.kcalRangeLow}–${r.kcalRangeHigh}</div>` : ''}
+        </div>
+        <div style="border:1px solid #bbf7d0; background:#f0fdf4; border-radius:10px; padding:10px; text-align:center;">
+          <div style="font-size:11px; color:#166534;">โปรตีน</div>
+          <div style="font-size:22px; font-weight:700; color:#15803d;">${r.protein||'-'}</div>
+          <div style="font-size:11px; color:#64748b;">g/วัน (${r.protFactor||'-'} g/kg)</div>
+        </div>
+        <div style="border:1px solid #bae6fd; background:#f0f9ff; border-radius:10px; padding:10px; text-align:center;">
+          <div style="font-size:11px; color:#0369a1;">ของเหลว</div>
+          <div style="font-size:22px; font-weight:700; color:#0284c7;">${r.fluid?Math.round(r.fluid):'-'}</div>
+          <div style="font-size:11px; color:#64748b;">ml/วัน</div>
+        </div>
+        <div style="border:1px solid #e2e8f0; background:#f8fafc; border-radius:10px; padding:10px; text-align:center;">
+          <div style="font-size:11px; color:#475569;">C:P:F</div>
+          <div style="font-size:16px; font-weight:700; color:#334155;">${r.ratio||'-'}</div>
+          <div style="font-size:10px; color:#64748b;">${r.guidelineSource||''}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:8px; color:#0f172a;">📊 ส่วนอาหารต่อมื้อ</div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="background:#0f172a; color:white;">
+            <th style="padding:8px; text-align:left;">หมวดอาหาร</th>
+            <th style="padding:8px; text-align:center;">เช้า</th>
+            <th style="padding:8px; text-align:center;">กลางวัน</th>
+            <th style="padding:8px; text-align:center;">เย็น</th>
+          </tr></thead>
+          <tbody>${exchangeRows}</tbody>
+        </table>
+      </div>
+
+      <div style="font-weight:700; font-size:14px; margin-bottom:10px; color:#0f172a;">🍱 แผนอาหาร 7 วัน</div>
+      ${weekCards}
+
+      <div style="background:#fefce8; border:1px solid #fde047; border-radius:10px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:6px;">💡 คำแนะนำเฉพาะราย</div>
+        <ul style="margin:0; padding-left:18px; font-size:13px; line-height:2;">${adviceHtml}</ul>
+      </div>
+
+      <div style="font-size:10px; color:#94a3b8; text-align:center; padding-bottom:8px;">
+        อ้างอิง: ${r.guidelineSource||'ESPEN General'} | Nutrition Calculator Pro<br>เอกสารนี้จัดทำเพื่อใช้ในทางการแพทย์เท่านั้น
+      </div>`;
+
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html><head>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600&display=swap" rel="stylesheet">
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
       <style>
-        body{font-family:'Prompt',sans-serif;padding:16px;font-size:11px;color:#000;}
-        table{width:100%;border-collapse:collapse;}
-        th,td{border:1px solid #ddd;padding:4px 6px;}
-        th{background:#0f172a;color:white;}
-        .print-btn{width:100%;padding:14px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:16px;font-family:'Prompt',sans-serif;cursor:pointer;margin-top:16px;}
-        @media print{@page{size:A4 landscape;margin:8mm;}.print-btn{display:none;}}
-      </style></head><body>
-      ${printContent}
+        *{box-sizing:border-box;}
+        body{font-family:'Prompt',sans-serif; padding:14px; font-size:13px; color:#1e293b; background:#fff; max-width:480px; margin:0 auto;}
+        table{width:100%; border-collapse:collapse;}
+        th,td{border:1px solid #e2e8f0; padding:8px 10px; font-size:13px;}
+        th{background:#0f172a; color:white; font-size:12px;}
+        td{vertical-align:top;}
+        .print-btn{width:100%; padding:16px; background:#3b82f6; color:white; border:none; border-radius:10px; font-size:16px; font-family:'Prompt',sans-serif; cursor:pointer; margin-top:14px; font-weight:600;}
+        .print-btn:active{background:#2563eb;}
+        @media print{
+          @page{size:A4 portrait; margin:10mm;}
+          .print-btn{display:none !important;}
+          body{max-width:100%; padding:0;}
+        }
+      </style>
+    </head><body>
+      ${mobileContent}
       <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
-      </body></html>`);
+    </body></html>`);
     win.document.close();
+
   } else {
+    // Desktop: print ปกติ (A4 landscape)
     document.getElementById('print-area').innerHTML = printContent;
     document.getElementById('print-area').style.display = 'block';
     window.print();
