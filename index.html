@@ -183,15 +183,15 @@
     </div>
     <button id="calcBtn">คำนวณเป้าหมายโภชนาการ</button>
     <button onclick="saveRecord()" style="background:#16a34a; margin-top:10px;">💾 บันทึกข้อมูลผู้ป่วย</button>
-<div style="text-align:right; margin-top:8px;">
-  <span onclick="document.getElementById('sheets-config').style.display = document.getElementById('sheets-config').style.display==='none'?'block':'none'" 
-    style="font-size:11px; color:#64748b; cursor:pointer; text-decoration:underline;">
-    ⚙️ ตั้งค่า Google Sheets
-  </span>
-</div>
+    <div style="text-align:right; margin-top:8px;">
+      <span onclick="document.getElementById('sheets-config').style.display = document.getElementById('sheets-config').style.display==='none'?'block':'none'"
+        style="font-size:11px; color:#64748b; cursor:pointer; text-decoration:underline;">
+        ⚙️ ตั้งค่า Google Sheets
+      </span>
+    </div>
 
     <!-- Google Sheets Config -->
-    <<div id="sheets-config" style="margin-top:12px; padding:10px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:12px; display:none;">
+    <div id="sheets-config" style="margin-top:12px; padding:10px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:12px; display:none;">
       <div style="font-weight:600; margin-bottom:6px; color:#475569;">⚙️ ตั้งค่า Google Sheets (สำหรับบันทึกข้อมูล)</div>
       <label class="field-label">Script URL (Google Apps Script Web App URL)</label>
       <input id="script-url" placeholder="https://script.google.com/macros/s/..." style="font-size:12px; margin-bottom:4px;">
@@ -215,12 +215,21 @@
     <div class="detail-box">
       <div style="font-weight: 600; margin-bottom: 8px;">📋 ข้อมูลอ้างอิงรายกรณี <span id="elderly-tag" style="color:#e11d48; font-size:11px;"></span></div>
       <div class="detail-item"><span>เกณฑ์น้ำหนักที่ใช้:</span><span id="ref-w-type" style="font-weight:600;"></span></div>
+      <div class="detail-item"><span>IBW (Hamwi):</span><span id="ref-ibw" style="font-weight:600; color:#475569;"></span></div>
+      <div class="detail-item"><span>AdjBW (IBW + 0.25×excess):</span><span id="ref-adjbw" style="font-weight:600; color:#475569;"></span></div>
       <div class="detail-item"><span>สูตรพลังงาน:</span><span><span id="ref-used-w"></span> kg × <span id="ref-k-factor"></span> kcal/kg</span></div>
+      <div class="detail-item"><span>ช่วงพลังงาน (kcal range):</span><span id="ref-kcal-range" style="font-weight:600; color:#1d4ed8;"></span></div>
       <div class="detail-item"><span>สูตรโปรตีน:</span><span><span id="ref-used-w2"></span> kg × <span id="ref-p-factor"></span> g/kg</span></div>
       <div class="detail-item"><span>สัดส่วน C:P:F:</span><span id="ref-ratio"></span></div>
       <div class="detail-item"><span>🔥 REE (Harris-Benedict):</span><span id="ref-ree" style="font-weight:600;color:#dc2626;"></span></div>
       <div class="detail-item"><span>⚡ TEE (REE × Activity):</span><span id="ref-tee" style="font-weight:600;color:#ea580c;"></span></div>
       <div class="detail-item"><span>💧 ของเหลว (ml/วัน):</span><span id="ref-fluid" style="font-weight:600;color:#0284c7;"></span></div>
+      <div id="ref-risk-box" style="display:none; margin-top:8px; padding:8px 10px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:12px; color:#991b1b;">
+        ⚠️ <b>Risk of Overfeeding</b> — BMI ≥25 (Thai CPG 2568: อ้วน) ใช้ AdjBW แทน ABW เพื่อป้องกัน Overfeeding
+      </div>
+      <div id="ref-clinical-note" style="display:none; margin-top:6px; padding:7px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; font-size:11px; color:#0369a1;">
+        🩺 <b>Clinical Note:</b> <span id="ref-clinical-note-text"></span>
+      </div>
     </div>
     <div id="advice-box" style="display:none; background:#fefce8; border:1px solid #fde047; border-radius:12px; padding:12px; margin-bottom:15px;">
       <div style="font-weight:600; margin-bottom:8px;">💡 คำแนะนำเฉพาะราย</div>
@@ -254,8 +263,6 @@
 
 <script>
 // ===== CONFIG =====
-// ถ้ามี Google Apps Script URL สำหรับบันทึก ใส่ตรงนี้
-// หรือให้ user กรอกใน UI
 let SCRIPT_URL = localStorage.getItem('nutrition_script_url') || '';
 
 document.getElementById('script-url').value = SCRIPT_URL;
@@ -298,6 +305,37 @@ function calcBMIPercentile(bmi, age, gender) {
   return p.toString();
 }
 
+// ===== THAI BMI CLASSIFICATION (Thai Obesity CPG พ.ศ.2568 + WHO Asia-Pacific 2000) =====
+// อ้างอิง: ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568 ตารางที่ 1
+// ปกติ 18.5–22.9 | น้ำหนักเกิน 23–24.9 | อ้วน ระดับ 1: 25–29.9 | อ้วน ระดับ 2: ≥30
+function getAsianDiagnosis(bmi) {
+  if (bmi < 18.5) return "Underweight";
+  if (bmi < 23.0) return "Normal";
+  if (bmi < 25.0) return "Overweight (น้ำหนักเกิน)";
+  if (bmi < 30.0) return "Obesity I (อ้วน ระดับ 1)";
+  return "Obesity II (อ้วน ระดับ 2)";
+}
+
+// ===== WEIGHT CALCULATION HELPER =====
+// ใช้ Hamwi IBW + ESPEN AdjBW
+// Thai CPG 2568: BMI ≥25 = อ้วน → ใช้ AdjBW แทน ABW ทันที
+function calcWeightParams(w, h, gender, bmi) {
+  const ibw = Math.max(
+    gender === "male" ? 48 + 1.06 * (h - 152.4) : 45.4 + 0.9 * (h - 152.4),
+    1
+  );
+  const adjbw = ibw + 0.25 * (w - ibw);
+  let usedWeight = w, weightType = "Actual BW (ABW)";
+  if (bmi < 18.5) {
+    usedWeight = ibw; weightType = "IBW (Hamwi)";
+  } else if (bmi >= 25.0) {
+    // Thai CPG 2568: อ้วน ระดับ 1-2 → ใช้ AdjBW เพื่อป้องกัน Overfeeding
+    usedWeight = Math.max(adjbw, ibw);
+    weightType = "Adjusted BW (AdjBW)";
+  }
+  return { ibw, adjbw, usedWeight, weightType };
+}
+
 // ===== PROCESS =====
 function process(data) {
   const w = parseFloat(data.weight);
@@ -306,14 +344,12 @@ function process(data) {
   const ckdStage = parseInt(data.ckdStage);
   const isChild = age < 18;
 
-  let ibw = data.gender === "male" ? h - 100 : h - 105;
-  ibw = Math.max(ibw, 1);
-  const ibwESPEN = data.gender === "male" ? 0.9*h-100 : 0.9*h-106;
   const bmi = w / ((h/100)**2);
 
   let bmiPercentile = "";
   if (isChild) bmiPercentile = calcBMIPercentile(bmi, age, data.gender);
 
+  // BMI Diagnosis
   let diagnosis;
   if (isChild) {
     if (bmiPercentile !== "") {
@@ -323,15 +359,24 @@ function process(data) {
       diagnosis = bmi<14?"Underweight":bmi<18?"Normal":bmi<21?"Overweight":"Obesity";
     }
   } else {
-    diagnosis = bmi<18.5?"Underweight":bmi<23?"Normal":bmi<25?"Overweight":bmi<30?"Obesity I":"Obesity II";
+    diagnosis = getAsianDiagnosis(bmi);
   }
 
-  let usedWeight = w, weightType = "Actual BW";
-  if (isChild) { if (bmi>=25) { usedWeight=ibw; weightType="IBW (Pediatric)"; } }
-  else {
-    if (bmi<18.5) { usedWeight=ibw; weightType="IBW"; }
-    else if (bmi>=30) { usedWeight=ibwESPEN+0.25*(w-ibwESPEN); weightType="Adjusted BW"; }
+  // น้ำหนักที่ใช้คำนวณ — Thai CPG 2568
+  let ibw, adjbw, usedWeight, weightType;
+  if (isChild) {
+    ibw = Math.max(data.gender === "male" ? 48+1.06*(h-152.4) : 45.4+0.9*(h-152.4), 1);
+    adjbw = ibw + 0.25*(w-ibw);
+    usedWeight = w; weightType = "Actual BW (ABW)";
+    if (bmi >= 25) { usedWeight = ibw; weightType = "IBW (Pediatric)"; }
+  } else {
+    const wp = calcWeightParams(w, h, data.gender, bmi);
+    ibw = wp.ibw; adjbw = wp.adjbw;
+    usedWeight = wp.usedWeight; weightType = wp.weightType;
   }
+
+  // riskOverfeeding flag: Thai CPG 2568 - BMI ≥25 เสี่ยง overfeeding หากใช้ ABW
+  const riskOverfeeding = !isChild && bmi >= 25.0;
 
   let ree;
   if (isChild) {
@@ -354,34 +399,71 @@ function process(data) {
   const activityFactor = data.icu?1.2:(age>=60?1.3:1.5);
   const tee = Math.round(ree*activityFactor);
 
-  let kcalFactor;
+  // ===== ENERGY CALCULATION (ESPEN 20–25 kcal/kg/day + Thai CPG 2568) =====
+  // อ้างอิง: ESPEN Clinical Nutrition Guideline + Thai Obesity CPG 2568
+  // BMI ≥25 (Thai อ้วน) → ใช้ AdjBW + kcal 20–25 kcal/kg เพื่อป้องกัน Overfeeding
+  let kcalFactor, kcalLow, kcalHigh, clinicalNote;
+
   if (isChild) {
     if (age<1) kcalFactor=100; else if (age<3) kcalFactor=95; else if (age<6) kcalFactor=85;
     else if (age<10) kcalFactor=75; else if (age<14) kcalFactor=60; else kcalFactor=50;
-  } else if (data.icu) kcalFactor=25;
-  else if (data.cancer) kcalFactor=bmi>=30?25:30;
-  else if (data.liver&&data.liverStage==="cirrhosis") kcalFactor=bmi>=30?25:35;
-  else if (data.infection) kcalFactor=30;
-  else if (bmi<18.5) kcalFactor=35;
-  else if (age>=60) kcalFactor=30;
-  else if (bmi>=30) kcalFactor=20;
-  else if (data.liver&&data.liverStage==="nafld") kcalFactor=25;
-  else kcalFactor=25;
+    kcalLow = kcalFactor; kcalHigh = kcalFactor;
+    clinicalNote = "คำนวณตาม ESPGHAN Pediatric";
+  } else if (data.icu) {
+    // ICU: เริ่มต้น 20 kcal/kg → เพิ่มได้ถึง 25 kcal/kg [ESPEN ICU 2023]
+    kcalLow=20; kcalHigh=25; kcalFactor=20;
+    clinicalNote = "ICU: เริ่ม 20 kcal/kg (permissive underfeeding) → ขยับ 25 หลัง stable";
+  } else if (data.cancer) {
+    kcalLow=25; kcalHigh=30; kcalFactor=bmi>=25?25:30;
+    clinicalNote = bmi>=25 ? "มะเร็ง + อ้วน (BMI≥25): ใช้ AdjBW × 25 kcal/kg" : "มะเร็ง BMI ปกติ: 30 kcal/kg";
+  } else if (data.liver && data.liverStage==="cirrhosis") {
+    kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:35;
+    clinicalNote = "Cirrhosis: 30–35 kcal/kg หลีกเลี่ยง Overfeeding";
+  } else if (data.infection) {
+    kcalLow=25; kcalHigh=30; kcalFactor=30;
+    clinicalNote = "ติดเชื้อ: 25–30 kcal/kg ตาม ESPEN Polymorbid";
+  } else if (bmi < 18.5) {
+    // Underweight: เพิ่มพลังงาน แต่ระวัง Refeeding Syndrome
+    kcalLow=30; kcalHigh=35; kcalFactor=35;
+    clinicalNote = "น้ำหนักน้อย: เริ่ม 30 kcal/kg ระวัง Refeeding Syndrome";
+  } else if (age >= 60) {
+    kcalLow=28; kcalHigh=30; kcalFactor=30;
+    clinicalNote = "ผู้สูงอายุ: 28–30 kcal/kg ตาม ESPEN Geriatric 2022";
+  } else if (bmi >= 25.0) {
+    // Thai CPG 2568: BMI ≥25 = อ้วน → ใช้ AdjBW + 20–25 kcal/kg (ESPEN)
+    // Acute condition → 20-22, Weight control → 20, General → 20-25
+    if (data.icu || data.infection) {
+      kcalLow=20; kcalHigh=22; kcalFactor=20;
+      clinicalNote = "อ้วน + ภาวะเฉียบพลัน (Thai BMI≥25): AdjBW × 20–22 kcal/kg";
+    } else {
+      kcalLow=20; kcalHigh=25; kcalFactor=22;
+      clinicalNote = "อ้วน (Thai CPG 2568, BMI≥25): ใช้ AdjBW × 20–25 kcal/kg [ESPEN] ป้องกัน Overfeeding";
+    }
+  } else if (data.liver && data.liverStage==="nafld") {
+    kcalLow=20; kcalHigh=25; kcalFactor=25;
+    clinicalNote = "NAFLD/NASH: ลดพลังงาน 500–750 kcal/วัน จากปกติ";
+  } else {
+    // Normal BMI (18.5–24.9)
+    kcalLow=25; kcalHigh=30; kcalFactor=25;
+    clinicalNote = "BMI ปกติ: 25–30 kcal/kg ตาม ESPEN General";
+  }
 
-  const kcal = Math.round(usedWeight*kcalFactor);
+  const kcal = Math.round(usedWeight * kcalFactor);
+  const kcalRangeLow = Math.round(usedWeight * kcalLow);
+  const kcalRangeHigh = Math.round(usedWeight * kcalHigh);
 
   let protFactor;
   if (isChild) {
     if (age<1) protFactor=2.0; else if (age<3) protFactor=1.8; else if (age<6) protFactor=1.5;
     else if (age<10) protFactor=1.2; else if (age<14) protFactor=1.0; else protFactor=1.0;
   } else if (data.icu) protFactor=1.3;
-  else if (data.cancer) protFactor=bmi>=30?1.3:1.5;
+  else if (data.cancer) protFactor=bmi>=25?1.3:1.5;        // Thai CPG: ≥25=อ้วน
   else if (data.dialysis) protFactor=1.2;
   else if (ckdStage>=3&&!data.dialysis) protFactor=0.6;
   else if (data.liver&&data.liverStage==="cirrhosis") protFactor=1.2;
   else if (data.infection) protFactor=1.5;
   else if (age>=60) protFactor=1.2;
-  else if (bmi>=30) protFactor=1.3;
+  else if (bmi>=25.0) protFactor=1.2;  // Thai CPG 2568: อ้วน ≥25 ต้องการโปรตีนเพิ่ม
   else protFactor=1.0;
 
   const protein = Math.round(usedWeight*protFactor);
@@ -396,6 +478,7 @@ function process(data) {
     if (data.icu) fluid=Math.min(fluid,1500);
   }
 
+  // Guideline source
   let guidelineSource="ESPEN General";
   if (isChild) guidelineSource="ESPGHAN/ESPEN Pediatric 2018";
   else if (data.icu) guidelineSource="ESPEN ICU 2023";
@@ -407,6 +490,7 @@ function process(data) {
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
   else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
+  else if (bmi>=25.0) guidelineSource="Thai Obesity CPG พ.ศ.2568 + ESPEN 20–25 kcal/kg";
 
   const ex = calculateExchangesLogic(kcal,protein,data.dm,ckdStage,data.dialysis,data.liver,data.liverStage,data.cancer,data.icu,data.infection);
   const advice = generateAdvice(data,bmi,ckdStage,isChild,age);
@@ -414,177 +498,246 @@ function process(data) {
   const weekPlan = generate7DayPlan(ex,data);
 
   return {
-    kcal,protein,fluid,bmi,diagnosis,age,usedWeight,weightType,
-    kcalFactor,protFactor,isChild,bmiPercentile,
-    ree:Math.round(ree),tee,guidelineSource,advice,
-    mealPlan,mealExchanges:mealPlan.exchanges,weekPlan,...ex
+    kcal, protein, fluid, bmi, diagnosis, age, usedWeight, weightType,
+    ibw: Math.round(ibw*10)/10,
+    adjbw: Math.round(adjbw*10)/10,
+    kcalFactor, protFactor, isChild, bmiPercentile,
+    kcalRangeLow, kcalRangeHigh, clinicalNote,
+    riskOverfeeding,
+    ree: Math.round(ree), tee, guidelineSource, advice,
+    mealPlan, mealExchanges: mealPlan.exchanges, weekPlan, ...ex
   };
 }
 
-// ===== EXCHANGE LOGIC =====
-function calculateExchangesLogic(kcal,protein,isDM,ckdStage,isDialysis,isLiver,liverStage,isCancer,isICU,isInfection) {
+// ===== [FIX 2] EXCHANGE LOGIC — ปรับ C:P:F ให้ตรงเป้าหมาย =====
+function calculateExchangesLogic(kcal, protein, isDM, ckdStage, isDialysis, isLiver, liverStage, isCancer, isICU, isInfection) {
   const EX = {
-    rice:{carb:18,prot:2,fat:0,kcal:80},meat:{carb:0,prot:7,fat:3,kcal:55},
-    fruit:{carb:15,prot:0,fat:0,kcal:60},veg:{carb:5,prot:2,fat:0,kcal:25},
-    fat:{carb:0,prot:0,fat:5,kcal:45},milk:{carb:12,prot:8,fat:5,kcal:120}
+    rice:  { carb:18, prot:2, fat:0, kcal:80 },
+    meat:  { carb:0,  prot:7, fat:3, kcal:55 },
+    fruit: { carb:15, prot:0, fat:0, kcal:60 },
+    veg:   { carb:5,  prot:2, fat:0, kcal:25 },
+    fat:   { carb:0,  prot:0, fat:5, kcal:45 },
+    milk:  { carb:12, prot:8, fat:5, kcal:120 }
   };
-  let milkEx = (ckdStage<3&&!isDialysis)?1:0;
-  let carbPct = isDM?45:50;
-  let meatEx = Math.round(protein/EX.meat.prot);
-  let fruitEx;
-  if (isDM) fruitEx=2;
-  else if (ckdStage>=3&&!isDialysis) fruitEx=1;
-  else { fruitEx=Math.round(kcal/800); fruitEx=Math.min(fruitEx,3); }
+
+  // กำหนด target C:P:F (%) ตามโรค
+  let targetCpct, targetPpct, targetFpct;
+  if (isDM)                                    { targetCpct=47; targetPpct=17; targetFpct=36; }
+  else if (ckdStage>=3 && !isDialysis)         { targetCpct=57; targetPpct=11; targetFpct=32; }
+  else if (isDialysis)                         { targetCpct=55; targetPpct=17; targetFpct=28; }
+  else if (isCancer)                           { targetCpct=52; targetPpct=17; targetFpct=31; }
+  else if (isICU)                              { targetCpct=52; targetPpct=22; targetFpct=26; }
+  else if (isLiver && liverStage==="cirrhosis"){ targetCpct=57; targetPpct=17; targetFpct=26; }
+  else                                         { targetCpct=55; targetPpct=12; targetFpct=33; }
+
+  // [FIX 2] คำนวณ protein จาก target %P ก่อน แล้วเปรียบเทียบกับ input protein
+  // ใช้ input protein (clinical prescription) แต่ปรับ carb/fat ให้สมดุล
+  const protKcal  = protein * 4;
+  const actualPpct = protKcal / kcal * 100;
+
+  // ปรับ carb % และ fat % ให้รวมได้ 100 โดยรักษาสัดส่วน C:F ตาม target
+  const remainPct = 100 - actualPpct;
+  const cfRatio   = targetCpct / (targetCpct + targetFpct);  // สัดส่วน C ใน (C+F)
+  const adjCpct   = remainPct * cfRatio;
+  const adjFpct   = remainPct * (1 - cfRatio);
+
+  // คำนวณ gram จาก % ที่ปรับแล้ว
+  const carbGram = (kcal * adjCpct / 100) / 4;
+  const fatGram  = (kcal * adjFpct / 100) / 9;
+
+  // Milk exchange
+  let milkEx = (ckdStage < 3 && !isDialysis) ? 1 : 0;
+
+  // Meat exchange จาก protein ที่ต้องการ (หักโปรตีนจาก milk, veg, rice ก่อน)
   let vegEx;
-  if (ckdStage>=3&&!isDialysis) vegEx=2;
+  if (ckdStage>=3 && !isDialysis) vegEx=2;
   else if (isCancer||isICU) vegEx=3;
   else { vegEx=Math.round(kcal/700); vegEx=Math.max(2,vegEx); }
 
-  let carbKcal=kcal*carbPct/100, carbGram=carbKcal/4;
-  let carbFromRice=carbGram-(fruitEx*EX.fruit.carb)-(milkEx*EX.milk.carb);
-  carbFromRice=Math.max(carbFromRice,0);
-  let riceEx=Math.round(carbFromRice/EX.rice.carb); riceEx=Math.max(riceEx,2);
-  let lowProtEx=(ckdStage>=4&&!isDialysis)?Math.round(riceEx*0.3):0;
-  riceEx=riceEx-lowProtEx;
-  let riceKcal=(riceEx+lowProtEx)*EX.rice.kcal;
-  let fatKcalRemain=kcal-riceKcal-(meatEx*EX.meat.kcal)-(fruitEx*EX.fruit.kcal)-(vegEx*EX.veg.kcal)-(milkEx*EX.milk.kcal);
-  let fatEx=Math.max(0,Math.round(fatKcalRemain/EX.fat.kcal));
-  let totalKcal=(riceEx*EX.rice.kcal)+(lowProtEx*EX.rice.kcal)+(meatEx*EX.meat.kcal)+(fruitEx*EX.fruit.kcal)+(vegEx*EX.veg.kcal)+(fatEx*EX.fat.kcal)+(milkEx*EX.milk.kcal);
+  let fruitEx;
+  if (isDM) fruitEx=2;
+  else if (ckdStage>=3 && !isDialysis) fruitEx=1;
+  else { fruitEx=Math.round(kcal/800); fruitEx=Math.min(fruitEx,3); }
 
-  let totalCarb=(riceEx+lowProtEx)*EX.rice.carb+fruitEx*EX.fruit.carb+vegEx*EX.veg.carb+milkEx*EX.milk.carb;
-  let totalProt=meatEx*EX.meat.prot+(riceEx+lowProtEx)*EX.rice.prot+vegEx*EX.veg.prot+milkEx*EX.milk.prot;
-  let totalFat=meatEx*EX.meat.fat+fatEx*EX.fat.fat+milkEx*EX.milk.fat;
-  let totalMacroKcal=(totalCarb*4)+(totalProt*4)+(totalFat*9);
-  let ratioC=totalMacroKcal>0?Math.round(totalCarb*4/totalMacroKcal*100):0;
-  let ratioP=totalMacroKcal>0?Math.round(totalProt*4/totalMacroKcal*100):0;
-  let ratioF=100-ratioC-ratioP;
+  // โปรตีนจากแหล่งอื่น (rice, veg, milk) — ประมาณเบื้องต้น
+  const protFromOther = (vegEx * EX.veg.prot) + (milkEx * EX.milk.prot);
+  const protForMeat   = Math.max(protein - protFromOther, 0);
+  let meatEx = Math.round(protForMeat / EX.meat.prot);
+  meatEx = Math.max(meatEx, 1);
 
+  // คาร์โบไฮเดรตจาก rice (หักจาก fruit, milk)
+  let carbFromRice = carbGram - (fruitEx * EX.fruit.carb) - (milkEx * EX.milk.carb) - (vegEx * EX.veg.carb);
+  carbFromRice = Math.max(carbFromRice, 0);
+  let riceEx = Math.round(carbFromRice / EX.rice.carb);
+  riceEx = Math.max(riceEx, 2);
+
+  // Low-protein exchange สำหรับ CKD stage 4+
+  let lowProtEx = (ckdStage >= 4 && !isDialysis) ? Math.round(riceEx * 0.3) : 0;
+  riceEx = riceEx - lowProtEx;
+
+  // [FIX 2] คำนวณ fat exchange จากพลังงานที่เหลือ (feedback loop)
+  const usedKcal = (riceEx + lowProtEx) * EX.rice.kcal
+                 + meatEx  * EX.meat.kcal
+                 + fruitEx * EX.fruit.kcal
+                 + vegEx   * EX.veg.kcal
+                 + milkEx  * EX.milk.kcal;
+  const fatKcalRemain = kcal - usedKcal;
+  let fatEx = Math.max(0, Math.round(fatKcalRemain / EX.fat.kcal));
+
+  // คำนวณ macro จริงหลังปรับ
+  const totalKcal = (riceEx + lowProtEx)*EX.rice.kcal + meatEx*EX.meat.kcal
+                  + fruitEx*EX.fruit.kcal + vegEx*EX.veg.kcal
+                  + fatEx*EX.fat.kcal + milkEx*EX.milk.kcal;
+
+  const totalCarb = (riceEx+lowProtEx)*EX.rice.carb + fruitEx*EX.fruit.carb
+                  + vegEx*EX.veg.carb + milkEx*EX.milk.carb;
+  const totalProt = meatEx*EX.meat.prot + (riceEx+lowProtEx)*EX.rice.prot
+                  + vegEx*EX.veg.prot + milkEx*EX.milk.prot;
+  const totalFat  = meatEx*EX.meat.fat + fatEx*EX.fat.fat + milkEx*EX.milk.fat;
+
+  const totalMacroKcal = (totalCarb*4) + (totalProt*4) + (totalFat*9);
+  const ratioC = totalMacroKcal>0 ? Math.round(totalCarb*4/totalMacroKcal*100) : 0;
+  const ratioP = totalMacroKcal>0 ? Math.round(totalProt*4/totalMacroKcal*100) : 0;
+  const ratioF = 100 - ratioC - ratioP;
+
+  // Target ratio string สำหรับแสดงผล
   let targetRatio;
-  if (isDM) targetRatio="45-50 : 15-20 : 25-35";
-  else if (ckdStage>=3&&!isDialysis) targetRatio="55-60 : 10-12 : 25-30";
-  else if (isDialysis) targetRatio="50-60 : 15-20 : 25-35";
-  else if (isCancer) targetRatio="50-55 : 15-20 : 25-30";
-  else if (isICU) targetRatio="50-55 : 20-25 : 25-30";
-  else if (isLiver&&liverStage==="cirrhosis") targetRatio="55-60 : 15-20 : 20-25";
-  else targetRatio="50-60 : 10-15 : 25-35";
+  if (isDM)                                    targetRatio="45-50 : 15-20 : 25-35";
+  else if (ckdStage>=3 && !isDialysis)         targetRatio="55-60 : 10-12 : 25-30";
+  else if (isDialysis)                         targetRatio="50-60 : 15-20 : 25-35";
+  else if (isCancer)                           targetRatio="50-55 : 15-20 : 25-30";
+  else if (isICU)                              targetRatio="50-55 : 20-25 : 25-30";
+  else if (isLiver && liverStage==="cirrhosis")targetRatio="55-60 : 15-20 : 20-25";
+  else                                         targetRatio="50-60 : 10-15 : 25-35";
 
-  return {riceEx,lowProtEx,meatEx,fruitEx,fatEx,vegEx,milkEx,totalKcal:Math.round(totalKcal),ratio:`${ratioC}:${ratioP}:${ratioF}`,targetRatio};
+  return {
+    riceEx, lowProtEx, meatEx, fruitEx, fatEx, vegEx, milkEx,
+    totalKcal: Math.round(totalKcal),
+    ratio: `${ratioC}:${ratioP}:${ratioF}`,
+    targetRatio
+  };
 }
 
 // ===== ADVICE =====
-function generateAdvice(data,bmi,ckdStage,isChild,age) {
-  let a=[];
+function generateAdvice(data, bmi, ckdStage, isChild, age) {
+  let a = [];
   if (isChild) a.push("คำนวณตามเกณฑ์โภชนาการเด็ก ESPGHAN");
   if (data.dm) a.push("ADA 2025: ควบคุมน้ำตาล เน้น low-GI ลดแป้งขัดสี เพิ่มใยอาหาร ≥14g/1000kcal");
-  if (ckdStage>=3&&!data.dialysis) a.push("จำกัดโปรตีน 0.6 g/kg ลดเค็ม");
+  if (ckdStage>=3 && !data.dialysis) a.push("จำกัดโปรตีน 0.6 g/kg ลดเค็ม");
   if (data.dialysis) a.push("เพิ่มโปรตีน 1.2 g/kg และจำกัดน้ำ");
-  if (data.liver&&data.liverStage==="cirrhosis") a.push("โปรตีน 1.2 g/kg ไม่จำกัดแม้มี HE");
-  if (data.liver&&data.liverStage==="nafld") a.push("ลดน้ำหนัก 5-10% ลดไขมัน ลดน้ำตาล");
+  if (data.liver && data.liverStage==="cirrhosis") a.push("โปรตีน 1.2 g/kg ไม่จำกัดแม้มี HE");
+  if (data.liver && data.liverStage==="nafld") a.push("ลดน้ำหนัก 5-10% ลดไขมัน ลดน้ำตาล");
   if (data.infection) a.push("เพิ่มพลังงาน 30 kcal และโปรตีน 1.5 g/kg");
-  if (bmi<18.5) a.push("เพิ่มอาหารว่าง นม พลังงาน 35 kcal/kg");
-  if (bmi>=25&&bmi<30) a.push("ลดไขมัน ของทอด ควบคุมพลังงาน");
-  if (!isChild&&bmi>=30) a.push("ใช้ Adjusted BW พลังงาน 20 kcal/kg");
-  if (isChild&&bmi>=25) a.push("เด็กอ้วน: ใช้ IBW คำนวณพลังงานตาม ESPGHAN");
-  if (age>=60) a.push("ผู้สูงอายุ: พลังงาน 30 kcal โปรตีน 1.2 g/kg");
-  if (ckdStage>=3&&!data.dialysis) a.push("KDIGO 2024: เพิ่มอาหารจากพืช ลดเนื้อแดงและอาหารแปรรูป");
+  if (bmi < 18.5) a.push("เพิ่มอาหารว่าง นม พลังงาน 35 kcal/kg");
+  if (bmi >= 23 && bmi < 25) a.push("น้ำหนักเกิน At Risk (Thai CPG: BMI 23–24.9): ระวังความเสี่ยงโรคเรื้อรัง ควบคุมพลังงาน");
+  if (!isChild && bmi >= 25) a.push("โรคอ้วน (Thai CPG 2568: BMI≥25): ใช้ AdjBW คำนวณ 20–25 kcal/kg ป้องกัน Overfeeding");
+  if (isChild && bmi >= 25) a.push("เด็กอ้วน: ใช้ IBW คำนวณพลังงานตาม ESPGHAN");
+  if (age >= 60) a.push("ผู้สูงอายุ: พลังงาน 30 kcal โปรตีน 1.2 g/kg");
+  if (ckdStage>=3 && !data.dialysis) a.push("KDIGO 2024: เพิ่มอาหารจากพืช ลดเนื้อแดงและอาหารแปรรูป");
   if (data.dialysis) a.push("KDIGO 2024: เพิ่มโปรตีนจากพืช ร่วมกับสัตว์ เพื่อลด uremic toxin");
   return a;
 }
 
 // ===== MEAL PLAN =====
 function generateMealPlan(ex, data) {
-  const ckdStage=parseInt(data.ckdStage)||0;
-  const isCKD=ckdStage>=3&&!data.dialysis;
-  const isChild=data.isChild||parseInt(data.age)<18;
-  const isElderly=!isChild&&parseInt(data.age)>=60;
+  const ckdStage = parseInt(data.ckdStage) || 0;
+  const isCKD = ckdStage >= 3 && !data.dialysis;
+  const isChild = data.isChild || parseInt(data.age) < 18;
+  const isElderly = !isChild && parseInt(data.age) >= 60;
 
-  const splitByCategory=(total,ratios)=>{
-    if(total<=0) return {b:0,l:0,d:0};
-    let b=Math.floor(total*ratios[0]),l=Math.floor(total*ratios[1]),d=Math.floor(total*ratios[2]);
-    let remainder=total-b-l-d;
-    const fracs=[{key:'b',frac:(total*ratios[0])-b},{key:'l',frac:(total*ratios[1])-l},{key:'d',frac:(total*ratios[2])-d}].sort((a,z)=>z.frac-a.frac);
-    const result={b,l,d};
-    for(let i=0;i<remainder;i++) result[fracs[i%3].key]++;
+  const splitByCategory = (total, ratios) => {
+    if (total <= 0) return {b:0, l:0, d:0};
+    let b=Math.floor(total*ratios[0]), l=Math.floor(total*ratios[1]), d=Math.floor(total*ratios[2]);
+    let remainder = total - b - l - d;
+    const fracs = [{key:'b',frac:(total*ratios[0])-b},{key:'l',frac:(total*ratios[1])-l},{key:'d',frac:(total*ratios[2])-d}].sort((a,z)=>z.frac-a.frac);
+    const result = {b, l, d};
+    for (let i = 0; i < remainder; i++) result[fracs[i%3].key]++;
     return result;
   };
-  const clampMax=(obj,max)=>({b:Math.min(obj.b,max),l:Math.min(obj.l,max),d:Math.min(obj.d,max)});
-  const ensureMin=(obj,min)=>({b:Math.max(obj.b,min),l:Math.max(obj.l,min),d:Math.max(obj.d,min)});
+  const clampMax = (obj, max) => ({b:Math.min(obj.b,max), l:Math.min(obj.l,max), d:Math.min(obj.d,max)});
+  const ensureMin = (obj, min) => ({b:Math.max(obj.b,min), l:Math.max(obj.l,min), d:Math.max(obj.d,min)});
 
-  let rice=splitByCategory(ex.riceEx,[0.33,0.34,0.33]);
-  if(data.dm&&!isChild) rice=clampMax(rice,2);
-  let meat=splitByCategory(ex.meatEx,[0.33,0.34,0.33]);
-  if(isElderly) meat=ensureMin(meat,1); else if(ex.meatEx>=3) meat=ensureMin(meat,1);
-  let veg=splitByCategory(ex.vegEx,[0.25,0.40,0.35]);
-  if(isCKD||data.dialysis) veg=clampMax(veg,1); else veg=ensureMin(veg,1);
-  const needFruitLimit=(data.dm&&!isChild)||isCKD||data.dialysis||(data.liver&&data.liverStage==="cirrhosis");
+  let rice = splitByCategory(ex.riceEx, [0.33, 0.34, 0.33]);
+  if (data.dm && !isChild) rice = clampMax(rice, 2);
+  let meat = splitByCategory(ex.meatEx, [0.33, 0.34, 0.33]);
+  if (isElderly) meat = ensureMin(meat, 1); else if (ex.meatEx >= 3) meat = ensureMin(meat, 1);
+  let veg = splitByCategory(ex.vegEx, [0.25, 0.40, 0.35]);
+  if (isCKD || data.dialysis) veg = clampMax(veg, 1); else veg = ensureMin(veg, 1);
+  const needFruitLimit = (data.dm && !isChild) || isCKD || data.dialysis || (data.liver && data.liverStage==="cirrhosis");
   let fruit;
-  if(needFruitLimit){const lt=Math.min(ex.fruitEx,3);fruit=clampMax(splitByCategory(lt,[0.33,0.34,0.33]),1);}
-  else fruit=splitByCategory(ex.fruitEx,[0.33,0.34,0.33]);
-  const fat=splitByCategory(ex.fatEx,[0.33,0.34,0.33]);
+  if (needFruitLimit) { const lt=Math.min(ex.fruitEx, 3); fruit = clampMax(splitByCategory(lt, [0.33, 0.34, 0.33]), 1); }
+  else fruit = splitByCategory(ex.fruitEx, [0.33, 0.34, 0.33]);
+  const fat = splitByCategory(ex.fatEx, [0.33, 0.34, 0.33]);
 
-  let milkB=0,milkSnack=0;
-  if(!isCKD&&!data.dialysis&&ex.milkEx>0){
-    milkB=1;
-    if(isChild) milkSnack=1;
-    if(isElderly&&ex.milkEx>=2) milkSnack=1;
+  let milkB = 0, milkSnack = 0;
+  if (!isCKD && !data.dialysis && ex.milkEx > 0) {
+    milkB = 1;
+    if (isChild) milkSnack = 1;
+    if (isElderly && ex.milkEx >= 2) milkSnack = 1;
   }
 
-  const riceMenuB=data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2},{name:"โจ๊กข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isChild?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
-  const riceMenuL=data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
-  const riceMenuD=data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isElderly?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}];
-  const meatMenuB=isChild?["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียว"]:["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียวไขมันต่ำ"];
-  const meatMenuL=(isCKD||data.dialysis)?["เต้าหู้ต้ม","ปลานึ่ง","ไก่ต้ม","ไข่ต้ม","เต้าหู้ผัด","กุ้งต้ม","ถั่วเหลืองต้ม"]:isChild?["ไก่ย่าง","ปลานึ่ง","ไข่เจียว","กุ้งต้ม","เต้าหู้ผัด","ปลาทอด"]:["ไก่ผัดน้ำมันหอย","กุ้งต้ม","ปลาย่าง","เต้าหู้ผัด","ไก่ย่าง","ปลานึ่ง","หมูนึ่ง"];
-  const meatMenuD=isElderly?["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม"]:["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม","ปลาย่าง","หมูอบ"];
-  const vegMenuB=(isCKD||data.dialysis)?["ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:isChild?["แตงกวาสด","มะเขือเทศ","ผักต้ม","ข้าวโพดต้ม"]:isElderly?["ผักลวกนิ่ม","ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:["ผักลวก","ผักต้ม","แตงกวาสด","มะเขือเทศ","ผักกาดขาวต้ม"];
-  const vegMenuL=(isCKD||data.dialysis)?["แกงจืดผักสุก","ต้มจืดผัก","ผักต้มสุก"]:isChild?["ผัดผักรวม","ต้มจืดผัก","แกงจืดผัก","ผักนึ่ง"]:isElderly?["แกงจืดผักนิ่ม","ต้มจืดผัก","ผักลวกนิ่ม","ซุปผัก"]:["ผัดผัก","แกงจืดผัก","ต้มจืดผัก","สลัดผัก","ผักลวกน้ำพริก"];
-  const vegMenuD=(isCKD||data.dialysis)?["ต้มจืดผัก","แกงจืดผักสุก","ซุปผักสุก"]:isChild?["ต้มจืดผัก","ผักต้ม","ซุปผัก"]:isElderly?["ต้มจืดผักนิ่ม","ซุปผัก","แกงจืดผัก","ผักลวกนิ่ม"]:["แกงจืดผัก","ต้มจืดผัก","ผักลวก","ผัดผักน้ำมันน้อย","ซุปผัก"];
-  const fruitMenu=data.dm?["ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","ชมพู่ 3 ผลกลาง","สาลี่ 1 ผลเล็ก","มะละกอสุก 6 ชิ้นคำ"]:(isCKD||data.dialysis)?["แอปเปิ้ล 1 ผลเล็ก","องุ่น 10 เม็ด","สับปะรด 6 ชิ้นคำ","ลูกแพร์ 1 ผลเล็ก"]:isChild?["กล้วยน้ำว้า 1 ผล","มะละกอสุก 6 ชิ้นคำ","ส้มเขียวหวาน 1 ผล","แตงโม 6 ชิ้นคำ","องุ่น 10 เม็ด"]:["กล้วยน้ำว้า 1 ผล","มะละกอสุก 8 ชิ้นคำ","ส้มเขียวหวาน 2 ผลกลาง","ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","แตงโม 8 ชิ้นคำ","ลำไย 5-6 ผล","ลองกอง 6-8 ผล","สับปะรด 8 ชิ้นคำ","ชมพู่ 3 ผลกลาง"];
-  const fatMenu=(data.cancer||data.icu)?["น้ำมันมะกอก","น้ำมันปลา","น้ำมันคาโนลา"]:["น้ำมันรำข้าว","น้ำมันมะกอก","น้ำมันถั่วเหลือง","น้ำมันพืช"];
-  const milkMenu=data.dm?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","โยเกิร์ต 0% ไขมัน 1 ถ้วย"]:isChild?["นมสดจืด 1 แก้ว (240 มล.)","นมครบส่วน 1 แก้ว (240 มล.)"]:isElderly?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นม Hi-Calcium 1 กล่อง (200 มล.)","โยเกิร์ตไขมันต่ำ 1 ถ้วย"]:["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","นมสดจืด 1 แก้ว (240 มล.)"];
+  const riceMenuB = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2},{name:"โจ๊กข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isChild?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
+  const riceMenuL = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
+  const riceMenuD = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isElderly?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}];
+  const meatMenuB = isChild?["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียว"]:["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียวไขมันต่ำ"];
+  const meatMenuL = (isCKD||data.dialysis)?["เต้าหู้ต้ม","ปลานึ่ง","ไก่ต้ม","ไข่ต้ม","เต้าหู้ผัด","กุ้งต้ม","ถั่วเหลืองต้ม"]:isChild?["ไก่ย่าง","ปลานึ่ง","ไข่เจียว","กุ้งต้ม","เต้าหู้ผัด","ปลาทอด"]:["ไก่ผัดน้ำมันหอย","กุ้งต้ม","ปลาย่าง","เต้าหู้ผัด","ไก่ย่าง","ปลานึ่ง","หมูนึ่ง"];
+  const meatMenuD = isElderly?["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม"]:["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม","ปลาย่าง","หมูอบ"];
+  const vegMenuB = (isCKD||data.dialysis)?["ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:isChild?["แตงกวาสด","มะเขือเทศ","ผักต้ม","ข้าวโพดต้ม"]:isElderly?["ผักลวกนิ่ม","ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:["ผักลวก","ผักต้ม","แตงกวาสด","มะเขือเทศ","ผักกาดขาวต้ม"];
+  const vegMenuL = (isCKD||data.dialysis)?["แกงจืดผักสุก","ต้มจืดผัก","ผักต้มสุก"]:isChild?["ผัดผักรวม","ต้มจืดผัก","แกงจืดผัก","ผักนึ่ง"]:isElderly?["แกงจืดผักนิ่ม","ต้มจืดผัก","ผักลวกนิ่ม","ซุปผัก"]:["ผัดผัก","แกงจืดผัก","ต้มจืดผัก","สลัดผัก","ผักลวกน้ำพริก"];
+  const vegMenuD = (isCKD||data.dialysis)?["ต้มจืดผัก","แกงจืดผักสุก","ซุปผักสุก"]:isChild?["ต้มจืดผัก","ผักต้ม","ซุปผัก"]:isElderly?["ต้มจืดผักนิ่ม","ซุปผัก","แกงจืดผัก","ผักลวกนิ่ม"]:["แกงจืดผัก","ต้มจืดผัก","ผักลวก","ผัดผักน้ำมันน้อย","ซุปผัก"];
+  const fruitMenu = data.dm?["ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","ชมพู่ 3 ผลกลาง","สาลี่ 1 ผลเล็ก","มะละกอสุก 6 ชิ้นคำ"]:(isCKD||data.dialysis)?["แอปเปิ้ล 1 ผลเล็ก","องุ่น 10 เม็ด","สับปะรด 6 ชิ้นคำ","ลูกแพร์ 1 ผลเล็ก"]:isChild?["กล้วยน้ำว้า 1 ผล","มะละกอสุก 6 ชิ้นคำ","ส้มเขียวหวาน 1 ผล","แตงโม 6 ชิ้นคำ","องุ่น 10 เม็ด"]:["กล้วยน้ำว้า 1 ผล","มะละกอสุก 8 ชิ้นคำ","ส้มเขียวหวาน 2 ผลกลาง","ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","แตงโม 8 ชิ้นคำ","ลำไย 5-6 ผล","ลองกอง 6-8 ผล","สับปะรด 8 ชิ้นคำ","ชมพู่ 3 ผลกลาง"];
+  const fatMenu = (data.cancer||data.icu)?["น้ำมันมะกอก","น้ำมันปลา","น้ำมันคาโนลา"]:["น้ำมันรำข้าว","น้ำมันมะกอก","น้ำมันถั่วเหลือง","น้ำมันพืช"];
+  const milkMenu = data.dm?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","โยเกิร์ต 0% ไขมัน 1 ถ้วย"]:isChild?["นมสดจืด 1 แก้ว (240 มล.)","นมครบส่วน 1 แก้ว (240 มล.)"]:isElderly?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นม Hi-Calcium 1 กล่อง (200 มล.)","โยเกิร์ตไขมันต่ำ 1 ถ้วย"]:["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","นมสดจืด 1 แก้ว (240 มล.)"];
 
-  const rand=(arr)=>arr[Math.floor(Math.random()*arr.length)];
-  const riceDisplay=(rMenu,portions)=>{if(portions<=0)return null;let item=rand(rMenu);let amount=portions*item.ratio;let amountStr=Number.isInteger(amount)?amount.toString():amount.toFixed(1);return `${item.name} ${amountStr} ${item.unit}`;};
-  const buildMeal=(rMenu,mMenu,vMenu,r,m,f,fr,v,milk)=>{
-    let parts=[];
-    let rDisplay=riceDisplay(rMenu,r);
-    if(!rDisplay&&m>0) rDisplay=riceDisplay(rMenu,1);
-    if(rDisplay) parts.push(rDisplay);
-    if(m>0) parts.push(`${rand(mMenu)} ${m} ส่วน (${m*2} ช้อน)`);
+  const rand = (arr) => arr[Math.floor(Math.random()*arr.length)];
+  const riceDisplay = (rMenu, portions) => {
+    if (portions <= 0) return null;
+    let item = rand(rMenu);
+    let amount = portions * item.ratio;
+    let amountStr = Number.isInteger(amount) ? amount.toString() : amount.toFixed(1);
+    return `${item.name} ${amountStr} ${item.unit}`;
+  };
+  const buildMeal = (rMenu, mMenu, vMenu, r, m, f, fr, v, milk) => {
+    let parts = [];
+    let rDisplay = riceDisplay(rMenu, r);
+    if (!rDisplay && m > 0) rDisplay = riceDisplay(rMenu, 1);
+    if (rDisplay) parts.push(rDisplay);
+    if (m > 0) parts.push(`${rand(mMenu)} ${m} ส่วน (${m*2} ช้อน)`);
     parts.push(rand(vMenu));
-    if(f>0) parts.push(`${rand(fatMenu)} ${f} ช้อนชา`);
-    if(fr>0) parts.push(rand(fruitMenu));
-    if(milk>0) parts.push(rand(milkMenu));
-    return parts.join(" + ")||"-";
+    if (f > 0) parts.push(`${rand(fatMenu)} ${f} ช้อนชา`);
+    if (fr > 0) parts.push(rand(fruitMenu));
+    if (milk > 0) parts.push(rand(milkMenu));
+    return parts.join(" + ") || "-";
   };
 
-  let snack="";
-  if(milkSnack>0) snack=rand(milkMenu);
+  let snack = "";
+  if (milkSnack > 0) snack = rand(milkMenu);
 
   return {
-    breakfast:buildMeal(riceMenuB,meatMenuB,vegMenuB,rice.b,meat.b,fat.b,fruit.b,veg.b,milkB),
-    lunch:buildMeal(riceMenuL,meatMenuL,vegMenuL,rice.l,meat.l,fat.l,fruit.l,veg.l,0),
-    dinner:buildMeal(riceMenuD,meatMenuD,vegMenuD,rice.d,meat.d,fat.d,fruit.d,veg.d,0),
+    breakfast: buildMeal(riceMenuB, meatMenuB, vegMenuB, rice.b, meat.b, fat.b, fruit.b, veg.b, milkB),
+    lunch:     buildMeal(riceMenuL, meatMenuL, vegMenuL, rice.l, meat.l, fat.l, fruit.l, veg.l, 0),
+    dinner:    buildMeal(riceMenuD, meatMenuD, vegMenuD, rice.d, meat.d, fat.d, fruit.d, veg.d, 0),
     snack,
-    exchanges:{
-      breakfast:{rice:rice.b,meat:meat.b,fat:fat.b,fruit:fruit.b,veg:veg.b,milk:milkB},
-      lunch:{rice:rice.l,meat:meat.l,fat:fat.l,fruit:fruit.l,veg:veg.l,milk:0},
-      dinner:{rice:rice.d,meat:meat.d,fat:fat.d,fruit:fruit.d,veg:veg.d,milk:0},
-      snack:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:milkSnack}
+    exchanges: {
+      breakfast: {rice:rice.b, meat:meat.b, fat:fat.b, fruit:fruit.b, veg:veg.b, milk:milkB},
+      lunch:     {rice:rice.l, meat:meat.l, fat:fat.l, fruit:fruit.l, veg:veg.l, milk:0},
+      dinner:    {rice:rice.d, meat:meat.d, fat:fat.d, fruit:fruit.d, veg:veg.d, milk:0},
+      snack:     {rice:0, meat:0, fat:0, fruit:0, veg:0, milk:milkSnack}
     }
   };
 }
 
-function generate7DayPlan(ex,data){
-  const days=["จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์","อาทิตย์"];
-  return days.map(day=>({day,...generateMealPlan(ex,data)}));
+function generate7DayPlan(ex, data) {
+  const days = ["จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์","อาทิตย์"];
+  return days.map(day => ({day, ...generateMealPlan(ex, data)}));
 }
 
-function updateManual(kcal,protein,isDM,ckdStage,isDialysis,isLiver,liverStage,isCancer,isICU,isInfection){
-  const ex=calculateExchangesLogic(kcal,protein,isDM,ckdStage,isDialysis,isLiver,liverStage,isCancer,isICU,isInfection);
-  const data={dm:isDM,ckdStage,dialysis:isDialysis,liver:isLiver,liverStage,cancer:isCancer,icu:isICU,isChild:false};
-  const mealPlan=generateMealPlan(ex,data);
-  const weekPlan=generate7DayPlan(ex,data);
-  return {...ex,mealPlan,weekPlan,mealExchanges:mealPlan.exchanges};
+function updateManual(kcal, protein, isDM, ckdStage, isDialysis, isLiver, liverStage, isCancer, isICU, isInfection) {
+  const ex = calculateExchangesLogic(kcal, protein, isDM, ckdStage, isDialysis, isLiver, liverStage, isCancer, isICU, isInfection);
+  const data = {dm:isDM, ckdStage, dialysis:isDialysis, liver:isLiver, liverStage, cancer:isCancer, icu:isICU, isChild:false};
+  const mealPlan = generateMealPlan(ex, data);
+  const weekPlan = generate7DayPlan(ex, data);
+  return {...ex, mealPlan, weekPlan, mealExchanges:mealPlan.exchanges};
 }
 
 // ===== UI =====
@@ -602,17 +755,17 @@ function calc() {
   setTimeout(() => {
     try {
       let d = {
-        hn:hn.value,an:an.value,ward:ward.value,user:user.value,
-        age:age.value,gender:gender.value,weight:weight.value,height:height.value,
+        hn:hn.value, an:an.value, ward:ward.value, user:user.value,
+        age:age.value, gender:gender.value, weight:weight.value, height:height.value,
         patientType:patientCategory.value+"_"+(parseInt(age.value)<18?"Pediatric":parseInt(age.value)>=60?"Elderly":"Adult"),
-        dm:dm.checked,ckdStage:parseInt(ckd.value),dialysis:dialysis.checked,infection:infection.checked,
-        liver:liver.checked,liverStage:liverStage.value,cancer:cancer.checked,cancerType:cancerType.value,icu:icu.checked
+        dm:dm.checked, ckdStage:parseInt(ckd.value), dialysis:dialysis.checked, infection:infection.checked,
+        liver:liver.checked, liverStage:liverStage.value, cancer:cancer.checked, cancerType:cancerType.value, icu:icu.checked
       };
       const r = process(d);
       lastR = r;
-      document.getElementById('res').style.display="block";
-      document.getElementById('res-kcal').value=r.kcal;
-      document.getElementById('res-prot').value=r.protein;
+      document.getElementById('res').style.display = "block";
+      document.getElementById('res-kcal').value = r.kcal;
+      document.getElementById('res-prot').value = r.protein;
       updateUI(r);
       renderMealPlan(r);
       renderWeekPlan(r.weekPlan);
@@ -624,114 +777,151 @@ function calc() {
 }
 
 function manualUpdate() {
-  let kcal=parseInt(document.getElementById('res-kcal').value);
-  let prot=parseInt(document.getElementById('res-prot').value);
-  if (!kcal||!prot) return;
+  let kcal = parseInt(document.getElementById('res-kcal').value);
+  let prot = parseInt(document.getElementById('res-prot').value);
+  if (!kcal || !prot) return;
 
-  const r = updateManual(kcal,prot,dm.checked,parseInt(ckd.value),dialysis.checked,liver.checked,liverStage.value,cancer.checked,icu.checked,infection.checked);
-  lastR={...lastR,...r,kcal,protein:prot,mealExchanges:r.mealPlan.exchanges};
-  lastR.kcalFactor=(kcal/lastR.usedWeight).toFixed(1);
-  lastR.protFactor=(prot/lastR.usedWeight).toFixed(1);
+  const r = updateManual(kcal, prot, dm.checked, parseInt(ckd.value), dialysis.checked, liver.checked, liverStage.value, cancer.checked, icu.checked, infection.checked);
+  lastR = {...lastR, ...r, kcal, protein:prot, mealExchanges:r.mealPlan.exchanges};
+  lastR.kcalFactor = (kcal/lastR.usedWeight).toFixed(1);
+  lastR.protFactor = (prot/lastR.usedWeight).toFixed(1);
   updateUI(lastR);
   renderMealPlan(lastR);
   renderWeekPlan(lastR.weekPlan);
 }
 
 function updateUI(r) {
-  document.getElementById('res-diag').innerText=(r.isChild?"👶 ":"")+"BMI: "+r.bmi.toFixed(1)+" ("+r.diagnosis+")";
-  let bColor=r.bmi<18.5?["#fef3c7","#92400e"]:(r.bmi>=23?["#fee2e2","#991b1b"]:["#dcfce7","#166534"]);
-  document.getElementById('res-diag').style.background=bColor[0];
-  document.getElementById('res-diag').style.color=bColor[1];
-  let tag="";
-  if(r.isChild) tag="👶 (เด็ก — คำนวณตาม ESPGHAN)";
-  else if(r.age>=60) tag="🧓 (ผู้สูงอายุ — ESPEN Geriatric)";
-  document.getElementById('elderly-tag').innerText=tag;
-  let currentKcal=parseFloat(document.getElementById('res-kcal').value);
-  let currentProt=parseFloat(document.getElementById('res-prot').value);
-  document.getElementById('ref-w-type').innerText=r.weightType;
-  document.getElementById('ref-used-w').innerText=r.usedWeight.toFixed(1);
-  document.getElementById('ref-used-w2').innerText=r.usedWeight.toFixed(1);
-  document.getElementById('ref-k-factor').innerText=(currentKcal/r.usedWeight).toFixed(1);
-  document.getElementById('ref-p-factor').innerText=(currentProt/r.usedWeight).toFixed(1);
-  document.getElementById('ref-ratio').innerHTML=`<span style="font-weight:600;">${r.ratio}</span><span style="font-size:11px; color:#64748b; margin-left:8px;">(เป้าหมาย: ${r.targetRatio||'50-60:10-15:25-35'})</span>`;
-  document.getElementById('ref-fluid').innerText=Math.round(r.fluid)+" ml";
-  document.getElementById('ref-ree').innerText=r.ree+" kcal";
-  document.getElementById('ref-tee').innerText=r.tee+" kcal";
-  if(r.isChild&&r.bmiPercentile){document.getElementById('bmi-percentile-box').style.display="block";document.getElementById('bmi-percentile-val').innerText="P"+r.bmiPercentile;}
-  else document.getElementById('bmi-percentile-box').style.display="none";
-  let glEl=document.getElementById('guideline-source');
-  if(glEl) glEl.innerText="📌 อ้างอิง: "+(r.guidelineSource||"ESPEN General");
+  document.getElementById('res-diag').innerText = (r.isChild?"👶 ":"") + "BMI: " + r.bmi.toFixed(1) + " (" + r.diagnosis + ")";
+  // Thai CPG 2568 color: ≥25 = red, 23-24.9 = orange, normal = green, under = yellow
+  let bColor;
+  if (r.bmi < 18.5) bColor = ["#fef3c7","#92400e"];
+  else if (r.bmi < 23.0) bColor = ["#dcfce7","#166534"];
+  else if (r.bmi < 25.0) bColor = ["#fff7ed","#c2410c"];   // At risk
+  else bColor = ["#fee2e2","#991b1b"];                       // Obese (Thai ≥25)
+  document.getElementById('res-diag').style.background = bColor[0];
+  document.getElementById('res-diag').style.color = bColor[1];
+  let tag = "";
+  if (r.isChild) tag = "👶 (เด็ก — คำนวณตาม ESPGHAN)";
+  else if (r.age >= 60) tag = "🧓 (ผู้สูงอายุ — ESPEN Geriatric)";
+  document.getElementById('elderly-tag').innerText = tag;
+  let currentKcal = parseFloat(document.getElementById('res-kcal').value);
+  let currentProt = parseFloat(document.getElementById('res-prot').value);
+  document.getElementById('ref-w-type').innerText = r.weightType;
+  // IBW & AdjBW
+  if (document.getElementById('ref-ibw')) document.getElementById('ref-ibw').innerText = r.ibw + " kg";
+  if (document.getElementById('ref-adjbw')) document.getElementById('ref-adjbw').innerText = r.adjbw + " kg";
+  document.getElementById('ref-used-w').innerText = r.usedWeight.toFixed(1);
+  document.getElementById('ref-used-w2').innerText = r.usedWeight.toFixed(1);
+  document.getElementById('ref-k-factor').innerText = (currentKcal/r.usedWeight).toFixed(1);
+  document.getElementById('ref-p-factor').innerText = (currentProt/r.usedWeight).toFixed(1);
+  // kcal range
+  if (document.getElementById('ref-kcal-range')) {
+    document.getElementById('ref-kcal-range').innerText =
+      (r.kcalRangeLow && r.kcalRangeHigh && r.kcalRangeLow !== r.kcalRangeHigh)
+        ? r.kcalRangeLow + " – " + r.kcalRangeHigh + " kcal/วัน"
+        : (r.kcalRangeLow || "-") + " kcal/วัน";
+  }
+  document.getElementById('ref-ratio').innerHTML = `<span style="font-weight:600;">${r.ratio}</span><span style="font-size:11px; color:#64748b; margin-left:8px;">(เป้าหมาย: ${r.targetRatio||'50-60:10-15:25-35'})</span>`;
+  document.getElementById('ref-fluid').innerText = Math.round(r.fluid) + " ml";
+  document.getElementById('ref-ree').innerText = r.ree + " kcal";
+  document.getElementById('ref-tee').innerText = r.tee + " kcal";
+  // riskOverfeeding flag
+  const riskBox = document.getElementById('ref-risk-box');
+  if (riskBox) riskBox.style.display = r.riskOverfeeding ? "block" : "none";
+  // clinicalNote
+  const noteBox = document.getElementById('ref-clinical-note');
+  const noteText = document.getElementById('ref-clinical-note-text');
+  if (noteBox && noteText && r.clinicalNote) {
+    noteBox.style.display = "block";
+    noteText.innerText = r.clinicalNote;
+  } else if (noteBox) { noteBox.style.display = "none"; }
+  document.getElementById('ref-ratio').innerHTML = `<span style="font-weight:600;">${r.ratio}</span><span style="font-size:11px; color:#64748b; margin-left:8px;">(เป้าหมาย: ${r.targetRatio||'50-60:10-15:25-35'})</span>`;
+  document.getElementById('ref-fluid').innerText = Math.round(r.fluid) + " ml";
+  document.getElementById('ref-ree').innerText = r.ree + " kcal";
+  document.getElementById('ref-tee').innerText = r.tee + " kcal";
+  if (r.isChild && r.bmiPercentile) {
+    document.getElementById('bmi-percentile-box').style.display = "block";
+    document.getElementById('bmi-percentile-val').innerText = "P" + r.bmiPercentile;
+  } else {
+    document.getElementById('bmi-percentile-box').style.display = "none";
+  }
+  let glEl = document.getElementById('guideline-source');
+  if (glEl) glEl.innerText = "📌 อ้างอิง: " + (r.guidelineSource || "ESPEN General");
 
-  const me=r.mealExchanges||{breakfast:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0},lunch:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0},dinner:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0}};
-  const rows=[
-    ["🍚 ข้าว-แป้ง",me.breakfast.rice,me.lunch.rice,me.dinner.rice,"#eff6ff"],
-    ["🍝 แป้งโปรตีนต่ำ",r.lowProtEx>0?Math.floor(r.lowProtEx*0.3):0,r.lowProtEx>0?Math.round(r.lowProtEx*0.4):0,r.lowProtEx>0?Math.max(0,r.lowProtEx-Math.floor(r.lowProtEx*0.3)-Math.round(r.lowProtEx*0.4)):0,"#eef2ff"],
-    ["🥩 เนื้อสัตว์",me.breakfast.meat,me.lunch.meat,me.dinner.meat,"#fff1f2"],
-    ["🥬 ผัก",me.breakfast.veg,me.lunch.veg,me.dinner.veg,"#f0fdf4"],
-    ["🍎 ผลไม้",me.breakfast.fruit,me.lunch.fruit,me.dinner.fruit,"#fefce8"],
-    ["🧈 ไขมัน",me.breakfast.fat,me.lunch.fat,me.dinner.fat,"#fff7ed"],
-    ["🥛 นม",me.breakfast.milk||0,me.lunch.milk||0,me.dinner.milk||0,"#faf5ff"]
+  const me = r.mealExchanges || {breakfast:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0},lunch:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0},dinner:{rice:0,meat:0,fat:0,fruit:0,veg:0,milk:0}};
+  const rows = [
+    ["🍚 ข้าว-แป้ง", me.breakfast.rice, me.lunch.rice, me.dinner.rice, "#eff6ff"],
+    ["🍝 แป้งโปรตีนต่ำ", r.lowProtEx>0?Math.floor(r.lowProtEx*0.3):0, r.lowProtEx>0?Math.round(r.lowProtEx*0.4):0, r.lowProtEx>0?Math.max(0,r.lowProtEx-Math.floor(r.lowProtEx*0.3)-Math.round(r.lowProtEx*0.4)):0, "#eef2ff"],
+    ["🥩 เนื้อสัตว์", me.breakfast.meat, me.lunch.meat, me.dinner.meat, "#fff1f2"],
+    ["🥬 ผัก", me.breakfast.veg, me.lunch.veg, me.dinner.veg, "#f0fdf4"],
+    ["🍎 ผลไม้", me.breakfast.fruit, me.lunch.fruit, me.dinner.fruit, "#fefce8"],
+    ["🧈 ไขมัน", me.breakfast.fat, me.lunch.fat, me.dinner.fat, "#fff7ed"],
+    ["🥛 นม", me.breakfast.milk||0, me.lunch.milk||0, me.dinner.milk||0, "#faf5ff"]
   ];
-  document.getElementById('meal-table').innerHTML=rows.map(row=>{
-    let total=row[1]+row[2]+row[3];
-    return total>0?`<tr style="background:${row[4]};"><td style="text-align:left;">${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`:"";
+  document.getElementById('meal-table').innerHTML = rows.map(row => {
+    let total = row[1] + row[2] + row[3];
+    return total > 0 ? `<tr style="background:${row[4]};"><td style="text-align:left;">${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>` : "";
   }).join('');
 
-  if(r.advice&&r.advice.length>0){document.getElementById('advice-box').style.display="block";document.getElementById('advice-list').innerHTML=r.advice.map(a=>`<div>• ${a}</div>`).join('');}
-  else document.getElementById('advice-box').style.display="none";
+  if (r.advice && r.advice.length > 0) {
+    document.getElementById('advice-box').style.display = "block";
+    document.getElementById('advice-list').innerHTML = r.advice.map(a => `<div>• ${a}</div>`).join('');
+  } else {
+    document.getElementById('advice-box').style.display = "none";
+  }
 }
 
-function renderMealPlan(r){
-  document.getElementById("meal-plan-box").style.display="block";
-  document.getElementById("meal-plan").innerHTML=`
+function renderMealPlan(r) {
+  document.getElementById("meal-plan-box").style.display = "block";
+  document.getElementById("meal-plan").innerHTML = `
     <div style="margin-bottom:10px;">🌅 <b>เช้า:</b> ${r.mealPlan.breakfast}</div>
     <div style="margin-bottom:10px;">🍛 <b>กลางวัน:</b> ${r.mealPlan.lunch}</div>
     <div style="margin-bottom:10px;">🌙 <b>เย็น:</b> ${r.mealPlan.dinner}</div>
   `;
 }
 
-function renderWeekPlan(week){
-  document.getElementById("week-plan-box").style.display="block";
-  let html="";
-  week.forEach(d=>{
-    html+=`<div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-radius:10px; border:1px solid #e2e8f0;">
+function renderWeekPlan(week) {
+  document.getElementById("week-plan-box").style.display = "block";
+  let html = "";
+  week.forEach(d => {
+    html += `<div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-radius:10px; border:1px solid #e2e8f0;">
       <div style="font-weight:600; margin-bottom:6px; color:#1e293b;">📅 วัน${d.day}</div>
       <div style="font-size:13px; line-height:1.8;">
         🌅 <b>เช้า:</b> ${d.breakfast}<br>
         🍛 <b>กลางวัน:</b> ${d.lunch}<br>
         🌙 <b>เย็น:</b> ${d.dinner}<br>
-        ${d.snack?`🍎 <b>ว่าง:</b> ${d.snack}`:""}
+        ${d.snack ? `🍎 <b>ว่าง:</b> ${d.snack}` : ""}
       </div>
     </div>`;
   });
-  document.getElementById("week-plan").innerHTML=html;
+  document.getElementById("week-plan").innerHTML = html;
 }
 
 // ===== SAVE RECORD =====
 async function saveRecord() {
-  if(!lastR||!lastR.kcal){alert("กรุณาคำนวณก่อนบันทึก");return;}
-  const scriptUrl=document.getElementById('script-url').value.trim();
-  if(!scriptUrl){alert("กรุณาใส่ Script URL ก่อนบันทึก\n(ดูในช่อง ⚙️ ตั้งค่า Google Sheets ด้านบน)");return;}
+  if (!lastR || !lastR.kcal) {alert("กรุณาคำนวณก่อนบันทึก"); return;}
+  const scriptUrl = document.getElementById('script-url').value.trim();
+  if (!scriptUrl) {alert("กรุณาใส่ Script URL ก่อนบันทึก\n(ดูในช่อง ⚙️ ตั้งค่า Google Sheets ด้านบน)"); return;}
 
   showLoading('กำลังบันทึก...');
-  let d={
-    hn:document.getElementById('hn').value,an:document.getElementById('an').value,
-    ward:document.getElementById('ward').value,user:document.getElementById('user').value,
-    age:document.getElementById('age').value,gender:document.getElementById('gender').value,
-    weight:document.getElementById('weight').value,height:document.getElementById('height').value,
+  let d = {
+    hn:document.getElementById('hn').value, an:document.getElementById('an').value,
+    ward:document.getElementById('ward').value, user:document.getElementById('user').value,
+    age:document.getElementById('age').value, gender:document.getElementById('gender').value,
+    weight:document.getElementById('weight').value, height:document.getElementById('height').value,
     patientType:document.getElementById('patientCategory').value+"_"+(parseInt(document.getElementById('age').value)<18?"Pediatric":parseInt(document.getElementById('age').value)>=60?"Elderly":"Adult"),
-    dm:document.getElementById('dm').checked,ckdStage:parseInt(document.getElementById('ckd').value),
-    dialysis:document.getElementById('dialysis').checked,infection:document.getElementById('infection').checked,
-    liver:document.getElementById('liver').checked,liverStage:document.getElementById('liverStage').value,
-    cancer:document.getElementById('cancer').checked,cancerType:document.getElementById('cancerType').value,
+    dm:document.getElementById('dm').checked, ckdStage:parseInt(document.getElementById('ckd').value),
+    dialysis:document.getElementById('dialysis').checked, infection:document.getElementById('infection').checked,
+    liver:document.getElementById('liver').checked, liverStage:document.getElementById('liverStage').value,
+    cancer:document.getElementById('cancer').checked, cancerType:document.getElementById('cancerType').value,
     icu:document.getElementById('icu').checked
   };
-  let resultToSave={...lastR,kcal:parseInt(document.getElementById('res-kcal').value),protein:parseInt(document.getElementById('res-prot').value)};
+  let resultToSave = {...lastR, kcal:parseInt(document.getElementById('res-kcal').value), protein:parseInt(document.getElementById('res-prot').value)};
 
   try {
     const response = await fetch(scriptUrl, {
-      method:'POST',
-      body:JSON.stringify({action:'saveRecord',data:d,result:resultToSave})
+      method: 'POST',
+      body: JSON.stringify({action:'saveRecord', data:d, result:resultToSave})
     });
     hideLoading();
     showStatus('✅ บันทึกข้อมูลเรียบร้อย');
@@ -742,34 +932,37 @@ async function saveRecord() {
 }
 
 // ===== PRINT =====
-function printPlan(){
-  if(!lastR||!lastR.kcal){alert("กรุณาคำนวณก่อนพิมพ์");return;}
-  const r=lastR;
-  const hn=document.getElementById('hn').value||"-";
-  const ward=document.getElementById('ward').value||"-";
-  const age=document.getElementById('age').value||"-";
-  const w=document.getElementById('weight').value||"-";
-  const h=document.getElementById('height').value||"-";
-  const user=document.getElementById('user').value||"-";
-  const date=new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
-  const week=r.weekPlan||[];
-  const weekRows=week.map(d=>`<tr><td style="font-weight:600; white-space:nowrap; padding:3px 6px;">${d.day}</td><td style="padding:3px 6px;">${d.breakfast||'-'}</td><td style="padding:3px 6px;">${d.lunch||'-'}</td><td style="padding:3px 6px;">${d.dinner||'-'}</td><td style="padding:3px 6px; white-space:nowrap;">${d.snack||'-'}</td></tr>`).join('');
-  const me=r.mealExchanges||{};const bk=me.breakfast||{};const lk=me.lunch||{};const dk=me.dinner||{};
-  const exchangeRows=[["ข้าว-แป้ง",bk.rice||0,lk.rice||0,dk.rice||0],["เนื้อสัตว์",bk.meat||0,lk.meat||0,dk.meat||0],["ผัก",bk.veg||0,lk.veg||0,dk.veg||0],["ผลไม้",bk.fruit||0,lk.fruit||0,dk.fruit||0],["ไขมัน",bk.fat||0,lk.fat||0,dk.fat||0],["นม",bk.milk||0,lk.milk||0,dk.milk||0]].filter(row=>row[1]+row[2]+row[3]>0).map(row=>`<tr><td>${row[0]}</td><td style="text-align:center;">${row[1]}</td><td style="text-align:center;">${row[2]}</td><td style="text-align:center;">${row[3]}</td></tr>`).join('');
-  const adviceHtml=(r.advice&&r.advice.length>0)?r.advice.map(a=>`<li>${a}</li>`).join(''):'<li>-</li>';
+function printPlan() {
+  if (!lastR || !lastR.kcal) {alert("กรุณาคำนวณก่อนพิมพ์"); return;}
+  const r = lastR;
+  const hn = document.getElementById('hn').value || "-";
+  const ward = document.getElementById('ward').value || "-";
+  const age = document.getElementById('age').value || "-";
+  const w = document.getElementById('weight').value || "-";
+  const h = document.getElementById('height').value || "-";
+  const user = document.getElementById('user').value || "-";
+  const date = new Date().toLocaleDateString('th-TH', {year:'numeric', month:'long', day:'numeric'});
+  const week = r.weekPlan || [];
+  const weekRows = week.map(d => `<tr><td style="font-weight:600; white-space:nowrap; padding:3px 6px;">${d.day}</td><td style="padding:3px 6px;">${d.breakfast||'-'}</td><td style="padding:3px 6px;">${d.lunch||'-'}</td><td style="padding:3px 6px;">${d.dinner||'-'}</td><td style="padding:3px 6px; white-space:nowrap;">${d.snack||'-'}</td></tr>`).join('');
+  const me = r.mealExchanges || {}; const bk = me.breakfast||{}; const lk = me.lunch||{}; const dk = me.dinner||{};
+  const exchangeRows = [["ข้าว-แป้ง",bk.rice||0,lk.rice||0,dk.rice||0],["เนื้อสัตว์",bk.meat||0,lk.meat||0,dk.meat||0],["ผัก",bk.veg||0,lk.veg||0,dk.veg||0],["ผลไม้",bk.fruit||0,lk.fruit||0,dk.fruit||0],["ไขมัน",bk.fat||0,lk.fat||0,dk.fat||0],["นม",bk.milk||0,lk.milk||0,dk.milk||0]].filter(row=>row[1]+row[2]+row[3]>0).map(row=>`<tr><td>${row[0]}</td><td style="text-align:center;">${row[1]}</td><td style="text-align:center;">${row[2]}</td><td style="text-align:center;">${row[3]}</td></tr>`).join('');
+  const adviceHtml = (r.advice && r.advice.length>0) ? r.advice.map(a=>`<li>${a}</li>`).join('') : '<li>-</li>';
 
   const printContent = `
     <div style="border-bottom:2px solid #0f172a; padding-bottom:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:flex-end;">
       <div><div style="font-size:16px; font-weight:700; color:#0f172a;">🏥 แผนโภชนาการผู้ป่วย</div><div style="font-size:11px; color:#64748b; margin-top:2px;">จัดทำโดย: ${user} | วันที่: ${date}</div></div>
       <div style="text-align:right; font-size:11px; color:#334155;">HN: <b>${hn}</b> | Ward: <b>${ward}</b></div>
     </div>
-    <div style="display:flex; gap:16px; margin-bottom:12px; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0;">
+    <div style="display:flex; gap:16px; margin-bottom:12px; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0; flex-wrap:wrap;">
       <span>อายุ <b>${age} ปี</b></span><span>น้ำหนัก <b>${w} kg</b></span><span>ส่วนสูง <b>${h} cm</b></span>
       <span>BMI <b>${r.bmi?r.bmi.toFixed(1):'-'}</b> (${r.diagnosis||'-'})</span>
+      <span>IBW <b>${r.ibw||'-'} kg</b></span>
       <span>น้ำหนักที่ใช้ <b>${r.usedWeight?r.usedWeight.toFixed(1):'-'} kg (${r.weightType||'-'})</b></span>
+      ${r.riskOverfeeding?'<span style="color:#dc2626; font-weight:700;">⚠️ Risk Overfeeding — AdjBW</span>':''}
     </div>
+    ${r.clinicalNote?`<div style="margin-bottom:10px; padding:6px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; font-size:10px; color:#0369a1;">🩺 <b>Clinical Note:</b> ${r.clinicalNote}</div>`:''}
     <div style="display:flex; gap:12px; margin-bottom:12px;">
-      <div style="flex:1; border:1px solid #bfdbfe; background:#eff6ff; border-radius:8px; padding:8px; text-align:center;"><div style="font-size:11px; color:#1e40af;">พลังงาน</div><div style="font-size:20px; font-weight:700; color:#1d4ed8;">${r.kcal||'-'} <span style="font-size:12px;">kcal/วัน</span></div><div style="font-size:9px; color:#64748b;">${r.kcalFactor||'-'} kcal/kg</div></div>
+      <div style="flex:1; border:1px solid #bfdbfe; background:#eff6ff; border-radius:8px; padding:8px; text-align:center;"><div style="font-size:11px; color:#1e40af;">พลังงาน</div><div style="font-size:20px; font-weight:700; color:#1d4ed8;">${r.kcal||'-'} <span style="font-size:12px;">kcal/วัน</span></div><div style="font-size:9px; color:#64748b;">${r.kcalFactor||'-'} kcal/kg</div>${(r.kcalRangeLow&&r.kcalRangeHigh&&r.kcalRangeLow!==r.kcalRangeHigh)?`<div style="font-size:9px; color:#3b82f6;">range: ${r.kcalRangeLow}–${r.kcalRangeHigh}</div>`:''}</div>
       <div style="flex:1; border:1px solid #bbf7d0; background:#f0fdf4; border-radius:8px; padding:8px; text-align:center;"><div style="font-size:11px; color:#166534;">โปรตีน</div><div style="font-size:20px; font-weight:700; color:#15803d;">${r.protein||'-'} <span style="font-size:12px;">g/วัน</span></div><div style="font-size:9px; color:#64748b;">${r.protFactor||'-'} g/kg</div></div>
       <div style="flex:1; border:1px solid #bae6fd; background:#f0f9ff; border-radius:8px; padding:8px; text-align:center;"><div style="font-size:11px; color:#0369a1;">ของเหลว</div><div style="font-size:20px; font-weight:700; color:#0284c7;">${r.fluid?Math.round(r.fluid):'-'} <span style="font-size:12px;">ml/วัน</span></div></div>
       <div style="flex:1; border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; padding:8px; text-align:center;"><div style="font-size:11px; color:#475569;">C:P:F</div><div style="font-size:16px; font-weight:700; color:#334155;">${r.ratio||'-'}</div><div style="font-size:9px; color:#64748b;">${r.guidelineSource||''}</div></div>
@@ -784,9 +977,8 @@ function printPlan(){
 
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  if(isMobile){
-    // มือถือ/tablet: เปิดหน้าใหม่
-    const win = window.open('','_blank');
+  if (isMobile) {
+    const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html><head>
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600&display=swap" rel="stylesheet">
@@ -803,13 +995,13 @@ function printPlan(){
       </body></html>`);
     win.document.close();
   } else {
-    // Desktop: print ปกติ
     document.getElementById('print-area').innerHTML = printContent;
-    document.getElementById('print-area').style.display='block';
+    document.getElementById('print-area').style.display = 'block';
     window.print();
-    document.getElementById('print-area').style.display='none';
+    document.getElementById('print-area').style.display = 'none';
   }
 }
+
 document.getElementById('calcBtn').addEventListener('click', calc);
 </script>
 
@@ -820,18 +1012,29 @@ document.getElementById('calcBtn').addEventListener('click', calc);
     <span style="font-weight:600; font-size:16px;">📋 สรุป Guidelines ที่ใช้</span>
     <span onclick="toggleGuide()" style="cursor:pointer; font-size:20px; color:#64748b;">✕</span>
   </div>
-  <div style="font-size:12px; color:#64748b; margin-bottom:12px;">อ้างอิงจาก ESPEN / KDOQI / ESPGHAN / ADA / KDIGO</div>
+  <div style="font-size:12px; color:#64748b; margin-bottom:12px;">อ้างอิงจาก ESPEN / KDOQI / ESPGHAN / ADA / KDIGO / WHO Asia-Pacific</div>
   <div style="background:#eff6ff; border-radius:10px; padding:12px; margin-bottom:10px;">
     <div style="font-weight:600; font-size:13px; color:#1e40af; margin-bottom:6px;">⚡ พลังงาน (kcal/kg/วัน)</div>
     <table style="width:100%; font-size:12px; border-collapse:collapse;">
       <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ทั่วไป</td><td style="text-align:right; font-weight:600;">25 kcal</td></tr>
       <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ผู้สูงอายุ ≥60 ปี</td><td style="text-align:right; font-weight:600;">30 kcal</td></tr>
-      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ผอม BMI &lt;18.5</td><td style="text-align:right; font-weight:600;">35 kcal</td></tr>
-      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">อ้วน BMI ≥30</td><td style="text-align:right; font-weight:600;">20 kcal (Adj.BW)</td></tr>
-      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ติดเชื้อ</td><td style="text-align:right; font-weight:600;">30 kcal</td></tr>
-      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">มะเร็ง / ICU</td><td style="text-align:right; font-weight:600;">25–30 kcal</td></tr>
+      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ผอม BMI &lt;18.5</td><td style="text-align:right; font-weight:600;">30–35 kcal</td></tr>
+      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;"><b>อ้วน (Thai BMI ≥25) + AdjBW</b></td><td style="text-align:right; font-weight:600; color:#dc2626;">20–25 kcal</td></tr>
+      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">ติดเชื้อ</td><td style="text-align:right; font-weight:600;">25–30 kcal</td></tr>
+      <tr style="border-bottom:1px solid #dbeafe;"><td style="padding:4px 0;">มะเร็ง / ICU</td><td style="text-align:right; font-weight:600;">20–25 kcal</td></tr>
       <tr><td style="padding:4px 0;">โรคตับ Cirrhosis</td><td style="text-align:right; font-weight:600;">30–35 kcal</td></tr>
     </table>
+  </div>
+  <div style="background:#fef2f2; border-radius:10px; padding:12px; margin-bottom:10px;">
+    <div style="font-weight:600; font-size:13px; color:#991b1b; margin-bottom:6px;">🧮 BMI — เกณฑ์คนไทย (Thai Obesity CPG พ.ศ.2568)</div>
+    <table style="width:100%; font-size:12px; border-collapse:collapse;">
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;">น้ำหนักน้อย</td><td style="text-align:right; font-weight:600;">&lt; 18.5</td></tr>
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;">ปกติ</td><td style="text-align:right; font-weight:600; color:#166534;">18.5–22.9</td></tr>
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;">น้ำหนักเกิน (At Risk)</td><td style="text-align:right; font-weight:600; color:#c2410c;">23.0–24.9</td></tr>
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;"><b>โรคอ้วน ระดับ 1</b> → ใช้ AdjBW</td><td style="text-align:right; font-weight:600; color:#dc2626;">25.0–29.9</td></tr>
+      <tr><td style="padding:4px 0;"><b>โรคอ้วน ระดับ 2</b> → ใช้ AdjBW</td><td style="text-align:right; font-weight:600; color:#991b1b;">≥ 30.0</td></tr>
+    </table>
+    <div style="font-size:10px; color:#94a3b8; margin-top:5px;">อ้างอิง: ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568 ตารางที่ 1</div>
   </div>
   <div style="background:#f0fdf4; border-radius:10px; padding:12px; margin-bottom:10px;">
     <div style="font-weight:600; font-size:13px; color:#166534; margin-bottom:6px;">🥩 โปรตีน (g/kg/วัน)</div>
@@ -858,16 +1061,16 @@ document.getElementById('calcBtn').addEventListener('click', calc);
   </div>
   <div style="background:#f8fafc; border-radius:10px; padding:12px; font-size:11px; color:#64748b; line-height:1.8;">
     <div style="font-weight:600; color:#334155; margin-bottom:4px;">📌 แหล่งอ้างอิง</div>
-    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2025 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018
+    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2025 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
   </div>
 </div>
 <script>
-function toggleGuide(){
-  const overlay=document.getElementById('guide-overlay');
-  const popup=document.getElementById('guide-popup');
-  const isOpen=popup.style.display==='block';
-  overlay.style.display=isOpen?'none':'block';
-  popup.style.display=isOpen?'none':'block';
+function toggleGuide() {
+  const overlay = document.getElementById('guide-overlay');
+  const popup = document.getElementById('guide-popup');
+  const isOpen = popup.style.display === 'block';
+  overlay.style.display = isOpen ? 'none' : 'block';
+  popup.style.display = isOpen ? 'none' : 'block';
 }
 </script>
 </body>
