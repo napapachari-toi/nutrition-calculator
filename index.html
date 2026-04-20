@@ -975,7 +975,12 @@ function printPlan() {
     <div style="margin-top:10px; font-size:9px; color:#94a3b8; text-align:center;">อ้างอิง: ${r.guidelineSource||'ESPEN General'} | คำนวณโดย Nutrition Calculator Pro | เอกสารนี้จัดทำเพื่อใช้ในทางการแพทย์เท่านั้น</div>
   `;
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // ตรวจ mobile/tablet ด้วย touch screen + ขนาดจอ (รองรับ iPadOS 13+ ที่ userAgent เป็น Macintosh)
+  const isMobile = (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)) ||
+    (window.screen.width <= 1024 && navigator.maxTouchPoints > 0)
+  );
 
   if (isMobile) {
     // ===== MOBILE: card-based layout อ่านง่ายบนจอแคบ =====
