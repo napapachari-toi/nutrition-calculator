@@ -165,8 +165,8 @@
       <label class="status-item"><input type="checkbox" id="icu"><span>ผู้ป่วยวิกฤต (ICU)</span></label>
       <div style="display:flex; align-items:center; background:#eff6ff; padding:8px; border-radius:8px; border:1px solid #dbeafe;">
         <span style="font-size:11px; margin-right:5px; font-weight:600;">CKD Stage:</span>
-        <select id="ckd" style="margin:0; padding:2px; width:70px; margin-bottom:0;">
-          <option value="0">0</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+        <select id="ckd" style="margin:0; padding:2px; width:82px; margin-bottom:0;">
+          <option value="0">0 (ปกติ)</option><option value="3">3a</option><option value="3.5">3b</option><option value="4">4</option><option value="5">5</option>
         </select>
       </div>
       <div style="display:flex; align-items:center; background:#fff7ed; padding:8px; border-radius:8px; border:1px solid #fed7aa; grid-column: span 2;">
@@ -341,7 +341,7 @@ function process(data) {
   const w = parseFloat(data.weight);
   const h = parseFloat(data.height);
   const age = parseInt(data.age);
-  const ckdStage = parseInt(data.ckdStage);
+  const ckdStage = parseFloat(data.ckdStage);
   const isChild = age < 18;
 
   const bmi = w / ((h/100)**2);
@@ -459,7 +459,8 @@ function process(data) {
   } else if (data.icu) protFactor=1.3;
   else if (data.cancer) protFactor=bmi>=25?1.3:1.5;        // Thai CPG: ≥25=อ้วน
   else if (data.dialysis) protFactor=1.2;
-  else if (ckdStage>=3&&!data.dialysis) protFactor=0.6;
+  else if (ckdStage>=3.5&&!data.dialysis) protFactor=0.6;   // CKD 3b-5: low-protein diet (KDOQI 2020)
+  else if (ckdStage>=3&&!data.dialysis) protFactor=0.8;      // CKD 3a: mild restriction
   else if (data.liver&&data.liverStage==="cirrhosis") protFactor=1.2;
   else if (data.infection) protFactor=1.5;
   else if (age>=60) protFactor=1.2;
@@ -485,7 +486,8 @@ function process(data) {
   else if (data.cancer) guidelineSource="ESPEN Cancer 2021";
   else if (data.liver&&data.liverStage==="cirrhosis") guidelineSource="ESPEN Liver Disease 2020";
   else if (data.liver&&data.liverStage==="nafld") guidelineSource="ESPEN NAFLD/NASH 2020";
-  else if (ckdStage>=3&&!data.dialysis) guidelineSource="KDOQI 2020 + KDIGO 2024";
+  else if (ckdStage>=3.5&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3b-5) + KDIGO 2024";
+  else if (ckdStage>=3&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3a) + KDIGO 2024";
   else if (data.dialysis) guidelineSource="KDOQI Nutrition CKD 2020";
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
@@ -546,17 +548,17 @@ function calculateExchangesLogic(kcal, protein, isDM, ckdStage, isDialysis, isLi
   const fatGram  = (kcal * adjFpct / 100) / 9;
 
   // Milk exchange
-  let milkEx = (ckdStage < 3 && !isDialysis) ? 1 : 0;
+  let milkEx = (ckdStage < 3.5 && !isDialysis) ? 1 : 0;
 
   // Meat exchange จาก protein ที่ต้องการ (หักโปรตีนจาก milk, veg, rice ก่อน)
   let vegEx;
-  if (ckdStage>=3 && !isDialysis) vegEx=2;
+  if (ckdStage>=3.5 && !isDialysis) vegEx=2;
   else if (isCancer||isICU) vegEx=3;
   else { vegEx=Math.round(kcal/700); vegEx=Math.max(2,vegEx); }
 
   let fruitEx;
-  if (isDM) fruitEx=2;
-  else if (ckdStage>=3 && !isDialysis) fruitEx=1;
+  if (ckdStage>=3.5 && !isDialysis) fruitEx=1;
+  else if (isDM) fruitEx=2;
   else { fruitEx=Math.round(kcal/800); fruitEx=Math.min(fruitEx,3); }
 
   // โปรตีนจากแหล่งอื่น (rice, veg, milk) — ประมาณเบื้องต้น
@@ -623,8 +625,21 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
   let a = [];
   if (isChild) a.push("คำนวณตามเกณฑ์โภชนาการเด็ก ESPGHAN");
   if (data.dm) a.push("ADA 2025: ควบคุมน้ำตาล เน้น low-GI ลดแป้งขัดสี เพิ่มใยอาหาร ≥14g/1000kcal");
-  if (ckdStage>=3 && !data.dialysis) a.push("จำกัดโปรตีน 0.6 g/kg ลดเค็ม");
-  if (data.dialysis) a.push("เพิ่มโปรตีน 1.2 g/kg และจำกัดน้ำ");
+  if (ckdStage>=3 && !data.dialysis) {
+    if (ckdStage < 3.5) {
+      // CKD Stage 3a: mild — protein slightly reduced, K/P ยังไม่จำกัดตามปกติ เว้นแต่ผลเลือดผิดปกติ
+      a.push("CKD Stage 3a: โปรตีน 0.8 g/kg/วัน ลดเค็ม <2.3 g โซเดียม/วัน ยังไม่จำเป็นต้องจำกัดโพแทสเซียม-ฟอสฟอรัสตามปกติ เว้นแต่ผลเลือดผิดปกติ (ติดตามผลเลือดสม่ำเสมอ)");
+    } else {
+      // CKD Stage 3b: เริ่มจำกัดโปรตีนและโพแทสเซียม-ฟอสฟอรัส
+      a.push("CKD Stage 3b: จำกัดโปรตีน 0.6 g/kg/วัน ลดเค็ม (KDOQI 2020)");
+      a.push("เริ่มจำกัดโพแทสเซียม (<2,000 มก./วัน) และฟอสฟอรัส: เลี่ยงข้าวกล้อง/ธัญพืชไม่ขัดสี ถั่วเมล็ดแห้ง นม/ผลิตภัณฑ์นม เลือกข้าวขาวแทน ลวก/ต้มผักทิ้งน้ำก่อนปรุงเพื่อลดโพแทสเซียม");
+    }
+    if (ckdStage>=4) a.push("CKD Stage 4-5: จำกัดโพแทสเซียมเข้มงวดขึ้น (<1,500 มก./วัน) และฟอสฟอรัสมากขึ้น เลี่ยงเครื่องในสัตว์ ไข่แดง นมและผลิตภัณฑ์นม ถั่ว/เมล็ดพืช และอาหารแปรรูป/กระป๋องที่มีสารกันบูดฟอสเฟต เลือกไข่ขาวแทนไข่ทั้งฟองเพื่อลดฟอสฟอรัส");
+  }
+  if (data.dialysis) {
+    a.push("เพิ่มโปรตีน 1.2 g/kg และจำกัดน้ำ (KDOQI 2020)");
+    a.push("แม้โปรตีนเพิ่มขึ้นยังต้องจำกัดโพแทสเซียม-ฟอสฟอรัส: เลือกเนื้อสัตว์/ไข่ขาวแทนถั่ว-นม ลวก/ต้มผักทิ้งน้ำก่อนปรุง เลี่ยงข้าวกล้องและอาหารแปรรูปที่มีสารกันบูดฟอสเฟต");
+  }
   if (data.liver && data.liverStage==="cirrhosis") a.push("โปรตีน 1.2 g/kg ไม่จำกัดแม้มี HE");
   if (data.liver && data.liverStage==="nafld") a.push("ลดน้ำหนัก 5-10% ลดไขมัน ลดน้ำตาล");
   if (data.infection) a.push("เพิ่มพลังงาน 30 kcal และโปรตีน 1.5 g/kg");
@@ -640,8 +655,10 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
 
 // ===== MEAL PLAN =====
 function generateMealPlan(ex, data) {
-  const ckdStage = parseInt(data.ckdStage) || 0;
-  const isCKD = ckdStage >= 3 && !data.dialysis;
+  const ckdStage = parseFloat(data.ckdStage) || 0;
+  // restrictKP: ผู้ป่วยที่ต้องจำกัดโพแทสเซียม-ฟอสฟอรัสในการเลือกเมนู
+  // เริ่มจำกัดตั้งแต่ CKD Stage 3b เป็นต้นไป (3a โดยทั่วไปยังไม่ต้องจำกัด เว้นแต่ผลเลือดผิดปกติ) และผู้ป่วยฟอกไต
+  const restrictKP = (ckdStage >= 3.5 && !data.dialysis) || data.dialysis;
   const isChild = data.isChild || parseInt(data.age) < 18;
   const isElderly = !isChild && parseInt(data.age) >= 60;
 
@@ -662,30 +679,60 @@ function generateMealPlan(ex, data) {
   let meat = splitByCategory(ex.meatEx, [0.33, 0.34, 0.33]);
   if (isElderly) meat = ensureMin(meat, 1); else if (ex.meatEx >= 3) meat = ensureMin(meat, 1);
   let veg = splitByCategory(ex.vegEx, [0.25, 0.40, 0.35]);
-  if (isCKD || data.dialysis) veg = clampMax(veg, 1); else veg = ensureMin(veg, 1);
-  const needFruitLimit = (data.dm && !isChild) || isCKD || data.dialysis || (data.liver && data.liverStage==="cirrhosis");
+  if (restrictKP) veg = clampMax(veg, 1); else veg = ensureMin(veg, 1);
+  const needFruitLimit = (data.dm && !isChild) || restrictKP || (data.liver && data.liverStage==="cirrhosis");
   let fruit;
   if (needFruitLimit) { const lt=Math.min(ex.fruitEx, 3); fruit = clampMax(splitByCategory(lt, [0.33, 0.34, 0.33]), 1); }
   else fruit = splitByCategory(ex.fruitEx, [0.33, 0.34, 0.33]);
   const fat = splitByCategory(ex.fatEx, [0.33, 0.34, 0.33]);
 
   let milkB = 0, milkSnack = 0;
-  if (!isCKD && !data.dialysis && ex.milkEx > 0) {
+  if (!restrictKP && ex.milkEx > 0) {
     milkB = 1;
     if (isChild) milkSnack = 1;
     if (isElderly && ex.milkEx >= 2) milkSnack = 1;
   }
 
-  const riceMenuB = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2},{name:"โจ๊กข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isChild?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
-  const riceMenuL = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
-  const riceMenuD = data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isElderly?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}];
-  const meatMenuB = isChild?["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียว"]:["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียวไขมันต่ำ"];
-  const meatMenuL = (isCKD||data.dialysis)?["เต้าหู้ต้ม","ปลานึ่ง","ไก่ต้ม","ไข่ต้ม","เต้าหู้ผัด","กุ้งต้ม","ถั่วเหลืองต้ม"]:isChild?["ไก่ย่าง","ปลานึ่ง","ไข่เจียว","กุ้งต้ม","เต้าหู้ผัด","ปลาทอด"]:["ไก่ผัดน้ำมันหอย","กุ้งต้ม","ปลาย่าง","เต้าหู้ผัด","ไก่ย่าง","ปลานึ่ง","หมูนึ่ง"];
-  const meatMenuD = isElderly?["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม"]:["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม","ปลาย่าง","หมูอบ"];
-  const vegMenuB = (isCKD||data.dialysis)?["ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:isChild?["แตงกวาสด","มะเขือเทศ","ผักต้ม","ข้าวโพดต้ม"]:isElderly?["ผักลวกนิ่ม","ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:["ผักลวก","ผักต้ม","แตงกวาสด","มะเขือเทศ","ผักกาดขาวต้ม"];
-  const vegMenuL = (isCKD||data.dialysis)?["แกงจืดผักสุก","ต้มจืดผัก","ผักต้มสุก"]:isChild?["ผัดผักรวม","ต้มจืดผัก","แกงจืดผัก","ผักนึ่ง"]:isElderly?["แกงจืดผักนิ่ม","ต้มจืดผัก","ผักลวกนิ่ม","ซุปผัก"]:["ผัดผัก","แกงจืดผัก","ต้มจืดผัก","สลัดผัก","ผักลวกน้ำพริก"];
-  const vegMenuD = (isCKD||data.dialysis)?["ต้มจืดผัก","แกงจืดผักสุก","ซุปผักสุก"]:isChild?["ต้มจืดผัก","ผักต้ม","ซุปผัก"]:isElderly?["ต้มจืดผักนิ่ม","ซุปผัก","แกงจืดผัก","ผักลวกนิ่ม"]:["แกงจืดผัก","ต้มจืดผัก","ผักลวก","ผัดผักน้ำมันน้อย","ซุปผัก"];
-  const fruitMenu = data.dm?["ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","ชมพู่ 3 ผลกลาง","สาลี่ 1 ผลเล็ก","มะละกอสุก 6 ชิ้นคำ"]:(isCKD||data.dialysis)?["แอปเปิ้ล 1 ผลเล็ก","องุ่น 10 เม็ด","สับปะรด 6 ชิ้นคำ","ลูกแพร์ 1 ผลเล็ก"]:isChild?["กล้วยน้ำว้า 1 ผล","มะละกอสุก 6 ชิ้นคำ","ส้มเขียวหวาน 1 ผล","แตงโม 6 ชิ้นคำ","องุ่น 10 เม็ด"]:["กล้วยน้ำว้า 1 ผล","มะละกอสุก 8 ชิ้นคำ","ส้มเขียวหวาน 2 ผลกลาง","ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","แตงโม 8 ชิ้นคำ","ลำไย 5-6 ผล","ลองกอง 6-8 ผล","สับปะรด 8 ชิ้นคำ","ชมพู่ 3 ผลกลาง"];
+  // ===== RICE/STARCH MENU =====
+  // restrictKP (CKD 3-5 / dialysis) ต้องมาก่อนเงื่อนไข DM เสมอ เพราะข้าวกล้อง/ธัญพืชไม่ขัดสี
+  // มีฟอสฟอรัสและโพแทสเซียมสูงกว่าข้าวขาวมาก ไม่เหมาะกับผู้ป่วยไตแม้จะเป็นเบาหวานร่วมด้วย
+  // (ควบคุมน้ำตาลในกลุ่มนี้ทำได้ด้วยการจำกัดจำนวนส่วนแทน)
+  const riceMenuB = restrictKP
+    ? [{name:"ข้าวสวย (ข้าวขาว)",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม (ข้าวขาว)",unit:"ทัพพี",ratio:2},{name:"โจ๊ก (ข้าวขาว)",unit:"ทัพพี",ratio:2}]
+    : data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2},{name:"โจ๊กข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isChild?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
+  const riceMenuL = restrictKP
+    ? [{name:"ข้าวสวย (ข้าวขาว)",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1}]
+    : data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"เส้นก๋วยเตี๋ยว",unit:"ทัพพี",ratio:1},{name:"เส้นขนมจีน",unit:"จับ",ratio:1},{name:"บะหมี่",unit:"ทัพพี",ratio:1},{name:"ข้าวเหนียว",unit:"ทัพพี",ratio:0.5}];
+  const riceMenuD = restrictKP
+    ? [{name:"ข้าวสวย (ข้าวขาว)",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม (ข้าวขาว)",unit:"ทัพพี",ratio:2}]
+    : data.dm?[{name:"ข้าวกล้อง",unit:"ทัพพี",ratio:1},{name:"ข้าวต้มข้าวกล้อง",unit:"ทัพพี",ratio:2}]:isElderly?[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2},{name:"โจ๊ก",unit:"ทัพพี",ratio:2}]:[{name:"ข้าวสวย",unit:"ทัพพี",ratio:1},{name:"ข้าวต้ม",unit:"ทัพพี",ratio:2}];
+
+  // ===== MEAT/PROTEIN MENU =====
+  // restrictKP: เลี่ยงถั่วเหลืองต้ม/ถั่วเมล็ดแห้ง (ฟอสฟอรัส-โพแทสเซียมสูง) เลือกไข่ขาวแทนไข่ทั้งฟอง
+  // (ฟอสฟอรัสส่วนใหญ่อยู่ในไข่แดง) เต้าหู้ให้แสดงเป็นตัวเลือกจำกัดปริมาณ
+  const meatMenuB = restrictKP
+    ? ["ไข่ขาวต้ม","ปลานึ่ง","ไก่ต้มฉีก","ไข่ขาวดาว"]
+    : isChild?["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียว"]:["ไข่ต้ม","ไข่ดาว","ปลาทูนึ่ง","ไก่ต้มฉีก","ปลานึ่ง","ไข่เจียวไขมันต่ำ"];
+  const meatMenuL = restrictKP
+    ? ["ไข่ขาวต้ม","ปลานึ่ง","ไก่ต้ม","กุ้งต้ม","เต้าหู้ต้ม (จำกัดปริมาณ)"]
+    : isChild?["ไก่ย่าง","ปลานึ่ง","ไข่เจียว","กุ้งต้ม","เต้าหู้ผัด","ปลาทอด"]:["ไก่ผัดน้ำมันหอย","กุ้งต้ม","ปลาย่าง","เต้าหู้ผัด","ไก่ย่าง","ปลานึ่ง","หมูนึ่ง"];
+  const meatMenuD = restrictKP
+    ? ["ปลานึ่ง","ไก่ต้มฉีก","ไข่ขาวต้ม","กุ้งต้ม"]
+    : isElderly?["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม"]:["ปลานึ่ง","ไก่ต้มฉีก","ต้มจืดเต้าหู้","กุ้งต้ม","ไข่ต้ม","ปลาย่าง","หมูอบ"];
+
+  // ===== VEGETABLE MENU =====
+  // restrictKP: เน้นผักลวก/ต้มทิ้งน้ำ เพื่อลดโพแทสเซียมที่ละลายออกมาในน้ำต้ม
+  const vegMenuB = restrictKP?["ผักต้มสุก (ลวกทิ้งน้ำ)","แตงกวาลวก","ผักกาดขาวต้ม (ลวกทิ้งน้ำ)"]:isChild?["แตงกวาสด","มะเขือเทศ","ผักต้ม","ข้าวโพดต้ม"]:isElderly?["ผักลวกนิ่ม","ผักต้มสุก","แตงกวาลวก","ผักกาดขาวต้ม"]:["ผักลวก","ผักต้ม","แตงกวาสด","มะเขือเทศ","ผักกาดขาวต้ม"];
+  const vegMenuL = restrictKP?["แกงจืดผักลวกทิ้งน้ำ","ต้มจืดผัก (ลวกทิ้งน้ำ)","ผักต้มสุก (ลวกทิ้งน้ำ)"]:isChild?["ผัดผักรวม","ต้มจืดผัก","แกงจืดผัก","ผักนึ่ง"]:isElderly?["แกงจืดผักนิ่ม","ต้มจืดผัก","ผักลวกนิ่ม","ซุปผัก"]:["ผัดผัก","แกงจืดผัก","ต้มจืดผัก","สลัดผัก","ผักลวกน้ำพริก"];
+  const vegMenuD = restrictKP?["ต้มจืดผัก (ลวกทิ้งน้ำ)","แกงจืดผักลวกทิ้งน้ำ","ซุปผักลวกทิ้งน้ำ"]:isChild?["ต้มจืดผัก","ผักต้ม","ซุปผัก"]:isElderly?["ต้มจืดผักนิ่ม","ซุปผัก","แกงจืดผัก","ผักลวกนิ่ม"]:["แกงจืดผัก","ต้มจืดผัก","ผักลวก","ผัดผักน้ำมันน้อย","ซุปผัก"];
+
+  // ===== FRUIT MENU =====
+  // restrictKP ต้องเช็คก่อน dm เสมอ (ผู้ป่วย CKD/dialysis ที่เป็นเบาหวานร่วมด้วยยังต้องเลี่ยงผลไม้โพแทสเซียมสูง
+  // เป็นอันดับแรก แล้วควบคุมปริมาณน้ำตาลด้วยการจำกัดจำนวนส่วนแทน)
+  const fruitMenu = restrictKP
+    ? ["แอปเปิ้ล 1 ผลเล็ก","องุ่น 10 เม็ด","สับปะรด 6 ชิ้นคำ","ลูกแพร์ 1 ผลเล็ก"]
+    : data.dm?["ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","ชมพู่ 3 ผลกลาง","สาลี่ 1 ผลเล็ก","มะละกอสุก 6 ชิ้นคำ"]:isChild?["กล้วยน้ำว้า 1 ผล","มะละกอสุก 6 ชิ้นคำ","ส้มเขียวหวาน 1 ผล","แตงโม 6 ชิ้นคำ","องุ่น 10 เม็ด"]:["กล้วยน้ำว้า 1 ผล","มะละกอสุก 8 ชิ้นคำ","ส้มเขียวหวาน 2 ผลกลาง","ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","แตงโม 8 ชิ้นคำ","ลำไย 5-6 ผล","ลองกอง 6-8 ผล","สับปะรด 8 ชิ้นคำ","ชมพู่ 3 ผลกลาง"];
+
   const fatMenu = (data.cancer||data.icu)?["น้ำมันมะกอก","น้ำมันปลา","น้ำมันคาโนลา"]:["น้ำมันรำข้าว","น้ำมันมะกอก","น้ำมันถั่วเหลือง","น้ำมันพืช"];
   const milkMenu = data.dm?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","โยเกิร์ต 0% ไขมัน 1 ถ้วย"]:isChild?["นมสดจืด 1 แก้ว (240 มล.)","นมครบส่วน 1 แก้ว (240 มล.)"]:isElderly?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นม Hi-Calcium 1 กล่อง (200 มล.)","โยเกิร์ตไขมันต่ำ 1 ถ้วย"]:["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","นมสดจืด 1 แก้ว (240 มล.)"];
 
@@ -748,7 +795,7 @@ function calc() {
   if (parseInt(age.value)<1){alert("สำหรับทารกอายุต่ำกว่า 1 ปี ควรปรึกษาแพทย์เฉพาะทาง");return;}
   if (liver.checked&&liverStage.value==="none"){alert("กรุณาเลือกชนิดโรคตับ");return;}
   if (cancer.checked&&cancerType.value==="none"){alert("กรุณาเลือกชนิดมะเร็ง");return;}
-  if (dialysis.checked&&parseInt(ckd.value)===0){alert("ผู้ป่วยฟอกไตควรระบุ CKD Stage ด้วย");return;}
+  if (dialysis.checked&&parseFloat(ckd.value)===0){alert("ผู้ป่วยฟอกไตควรระบุ CKD Stage ด้วย");return;}
 
   showLoading('กำลังคำนวณ...');
 
@@ -758,7 +805,7 @@ function calc() {
         hn:hn.value, an:an.value, ward:ward.value, user:user.value,
         age:age.value, gender:gender.value, weight:weight.value, height:height.value,
         patientType:patientCategory.value+"_"+(parseInt(age.value)<18?"Pediatric":parseInt(age.value)>=60?"Elderly":"Adult"),
-        dm:dm.checked, ckdStage:parseInt(ckd.value), dialysis:dialysis.checked, infection:infection.checked,
+        dm:dm.checked, ckdStage:parseFloat(ckd.value), dialysis:dialysis.checked, infection:infection.checked,
         liver:liver.checked, liverStage:liverStage.value, cancer:cancer.checked, cancerType:cancerType.value, icu:icu.checked
       };
       const r = process(d);
@@ -781,7 +828,7 @@ function manualUpdate() {
   let prot = parseInt(document.getElementById('res-prot').value);
   if (!kcal || !prot) return;
 
-  const r = updateManual(kcal, prot, dm.checked, parseInt(ckd.value), dialysis.checked, liver.checked, liverStage.value, cancer.checked, icu.checked, infection.checked);
+  const r = updateManual(kcal, prot, dm.checked, parseFloat(ckd.value), dialysis.checked, liver.checked, liverStage.value, cancer.checked, icu.checked, infection.checked);
   lastR = {...lastR, ...r, kcal, protein:prot, mealExchanges:r.mealPlan.exchanges};
   lastR.kcalFactor = (kcal/lastR.usedWeight).toFixed(1);
   lastR.protFactor = (prot/lastR.usedWeight).toFixed(1);
@@ -910,7 +957,7 @@ async function saveRecord() {
     age:document.getElementById('age').value, gender:document.getElementById('gender').value,
     weight:document.getElementById('weight').value, height:document.getElementById('height').value,
     patientType:document.getElementById('patientCategory').value+"_"+(parseInt(document.getElementById('age').value)<18?"Pediatric":parseInt(document.getElementById('age').value)>=60?"Elderly":"Adult"),
-    dm:document.getElementById('dm').checked, ckdStage:parseInt(document.getElementById('ckd').value),
+    dm:document.getElementById('dm').checked, ckdStage:parseFloat(document.getElementById('ckd').value),
     dialysis:document.getElementById('dialysis').checked, infection:document.getElementById('infection').checked,
     liver:document.getElementById('liver').checked, liverStage:document.getElementById('liverStage').value,
     cancer:document.getElementById('cancer').checked, cancerType:document.getElementById('cancerType').value,
@@ -1137,7 +1184,8 @@ document.getElementById('calcBtn').addEventListener('click', calc);
       <tr style="border-bottom:1px solid #dcfce7;"><td style="padding:4px 0;">มะเร็ง</td><td style="text-align:right; font-weight:600;">1.0–1.5 g</td></tr>
       <tr style="border-bottom:1px solid #dcfce7;"><td style="padding:4px 0;">โรคตับ Cirrhosis</td><td style="text-align:right; font-weight:600;">1.2 g</td></tr>
       <tr style="border-bottom:1px solid #dcfce7;"><td style="padding:4px 0;">Dialysis (HD/PD)</td><td style="text-align:right; font-weight:600;">1.2 g</td></tr>
-      <tr><td style="padding:4px 0;">CKD 3–5 (ไม่ฟอก)</td><td style="text-align:right; font-weight:600;">0.6 g</td></tr>
+      <tr style="border-bottom:1px solid #dcfce7;"><td style="padding:4px 0;">CKD 3a (ไม่ฟอก)</td><td style="text-align:right; font-weight:600;">0.8 g</td></tr>
+      <tr><td style="padding:4px 0;">CKD 3b–5 (ไม่ฟอก)</td><td style="text-align:right; font-weight:600;">0.6 g</td></tr>
     </table>
   </div>
   <div style="background:#fef9c3; border-radius:10px; padding:12px; margin-bottom:10px;">
@@ -1150,9 +1198,27 @@ document.getElementById('calcBtn').addEventListener('click', calc);
       <tr><td style="padding:4px 0;">10–18 ปี</td><td style="text-align:right; font-weight:600;">50–60 kcal / 1.0 g prot</td></tr>
     </table>
   </div>
+  <div style="background:#fef2f2; border-radius:10px; padding:12px; margin-bottom:10px;">
+    <div style="font-weight:600; font-size:13px; color:#991b1b; margin-bottom:6px;">🧂 CKD/Dialysis — หลักเลือกอาหารโพแทสเซียม/ฟอสฟอรัสต่ำ</div>
+    <table style="width:100%; font-size:11px; border-collapse:collapse; margin-bottom:8px;">
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;">Stage 3a</td><td style="text-align:right; font-weight:600;">ยังไม่จำกัด K/P ตามปกติ*</td></tr>
+      <tr style="border-bottom:1px solid #fecaca;"><td style="padding:4px 0;">Stage 3b</td><td style="text-align:right; font-weight:600; color:#c2410c;">K &lt; 2,000 มก./วัน</td></tr>
+      <tr><td style="padding:4px 0;">Stage 4–5</td><td style="text-align:right; font-weight:600; color:#dc2626;">K &lt; 1,500 มก./วัน</td></tr>
+    </table>
+    <div style="font-size:10px; color:#94a3b8; margin-bottom:8px;">*Stage 3a จำกัดเมื่อผลเลือดผิดปกติเท่านั้น — แอปนี้เริ่มปรับเมนู (ข้าวขาว/ไข่ขาว/ผักลวก/ผลไม้ K ต่ำ) ตั้งแต่ Stage 3b เป็นต้นไป</div>
+    <div style="font-size:11px; color:#7f1d1d; line-height:1.9;">
+      • ข้าว-แป้ง: ใช้ <b>ข้าวขาว</b> แทนข้าวกล้อง/ธัญพืชไม่ขัดสี (ฟอสฟอรัสสูงกว่า)<br>
+      • โปรตีน: เลือก <b>ไข่ขาว</b> แทนไข่ทั้งฟอง (ฟอสฟอรัสส่วนใหญ่อยู่ในไข่แดง) จำกัดถั่ว/เต้าหู้<br>
+      • ผัก: <b>ลวก/ต้มทิ้งน้ำ</b> ก่อนปรุง เพื่อลดโพแทสเซียมที่ละลายออกมา<br>
+      • ผลไม้: เลือกชนิดโพแทสเซียมต่ำ เช่น แอปเปิ้ล องุ่น สับปะรด ลูกแพร์ ปริมาณจำกัด<br>
+      • นม/ผลิตภัณฑ์นม: จำกัดหรืองด (ฟอสฟอรัส-โพแทสเซียมสูง)<br>
+      • หลีกเลี่ยงอาหารแปรรูป/กระป๋องที่มีสารกันบูดฟอสเฟต โดยเฉพาะ Stage 4-5
+    </div>
+  </div>
   <div style="background:#f8fafc; border-radius:10px; padding:12px; font-size:11px; color:#64748b; line-height:1.8;">
     <div style="font-weight:600; color:#334155; margin-bottom:4px;">📌 แหล่งอ้างอิง</div>
     ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2025 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
+    <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:10px;">โปรตีน/โพแทสเซียมรายระยะ 3a-3b: สอดคล้องแนวทางปฏิบัติทางคลินิกที่ใช้กันทั่วไป (protein 3a 0.8–1.0 g/kg, 3b 0.6–0.8 g/kg; K ไม่จำกัดถึง 3a, 3b &lt;2,000 มก./วัน, 4-5 &lt;1,500 มก./วัน) — ควรปรับตามผลเลือดจริงของผู้ป่วยและดุลยพินิจของทีมรักษาเสมอ</div>
   </div>
 </div>
 <script>
