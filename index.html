@@ -163,6 +163,15 @@
       <label class="status-item"><input type="checkbox" id="liver"><span>โรคตับ (Liver)</span></label>
       <label class="status-item"><input type="checkbox" id="cancer"><span>มะเร็ง (Cancer)</span></label>
       <label class="status-item"><input type="checkbox" id="icu"><span>ผู้ป่วยวิกฤต (ICU)</span></label>
+      <label class="status-item"><input type="checkbox" id="surgery"><span>ผ่าตัด (Surgery)</span></label>
+      <label class="status-item"><input type="checkbox" id="stroke"><span>เส้นเลือดสมอง (Stroke)</span></label>
+      <label class="status-item"><input type="checkbox" id="hyperlipid"><span>ไขมันในเลือดสูง</span></label>
+      <label class="status-item"><input type="checkbox" id="hypertension"><span>ความดันโลหิตสูง</span></label>
+      <div style="display:flex; align-items:center; background:#fef2f2; padding:8px; border-radius:8px; border:1px solid #fecaca; grid-column: span 2;">
+        <label class="status-item" style="background:none; border:none; padding:0; flex:0 0 auto;"><input type="checkbox" id="burn"><span style="white-space:nowrap;">🔥 Burn (แผลไฟไหม้/น้ำร้อนลวก)</span></label>
+        <span style="font-size:11px; margin:0 6px; font-weight:600; white-space:nowrap;">%TBSA:</span>
+        <input type="number" id="tbsa" placeholder="เช่น 25" min="1" max="100" style="margin:0; padding:4px; width:70px; margin-bottom:0;">
+      </div>
       <div style="display:flex; align-items:center; background:#eff6ff; padding:8px; border-radius:8px; border:1px solid #dbeafe;">
         <span style="font-size:11px; margin-right:5px; font-weight:600;">CKD Stage:</span>
         <select id="ckd" style="margin:0; padding:2px; width:82px; margin-bottom:0;">
@@ -409,6 +418,15 @@ function process(data) {
     else if (age<10) kcalFactor=75; else if (age<14) kcalFactor=60; else kcalFactor=50;
     kcalLow = kcalFactor; kcalHigh = kcalFactor;
     clinicalNote = "คำนวณตาม ESPGHAN Pediatric";
+  } else if (data.burn) {
+    // ESPEN Burn 2013 (Nutritional therapy in major burns): energy tiered by %TBSA.
+    // This is a simplified bedside estimate — indirect calorimetry or the Toronto equation
+    // is preferred when available to avoid overfeeding risk from predictive formulas.
+    const tbsaVal = data.tbsa || 0;
+    if (tbsaVal >= 40) { kcalLow=35; kcalHigh=40; kcalFactor=40; }
+    else if (tbsaVal >= 20) { kcalLow=35; kcalHigh=40; kcalFactor=37; }
+    else { kcalLow=30; kcalHigh=35; kcalFactor=32; }
+    clinicalNote = `Burn (TBSA ${tbsaVal}%): ประมาณ ${kcalLow}-${kcalHigh} kcal/kg (ค่าประมาณเบื้องต้น) — แนะนำ Indirect Calorimetry หรือ Toronto Equation หากทำได้ จำกัดกลูโคส ≤55% ของพลังงาน (ESPEN Burn 2013)`;
   } else if (data.icu) {
     // ICU: เริ่มต้น 20 kcal/kg → เพิ่มได้ถึง 25 kcal/kg [ESPEN ICU 2023]
     kcalLow=20; kcalHigh=25; kcalFactor=20;
@@ -419,6 +437,9 @@ function process(data) {
   } else if (data.liver && data.liverStage==="cirrhosis") {
     kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:35;
     clinicalNote = "Cirrhosis: 30–35 kcal/kg หลีกเลี่ยง Overfeeding";
+  } else if (data.surgery) {
+    kcalLow=25; kcalHigh=30; kcalFactor=27;
+    clinicalNote = "ผ่าตัด (Surgery): 25–30 kcal/kg (ESPEN Surgery) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS";
   } else if (data.infection) {
     kcalLow=25; kcalHigh=30; kcalFactor=30;
     clinicalNote = "ติดเชื้อ: 25–30 kcal/kg ตาม ESPEN Polymorbid";
@@ -456,12 +477,14 @@ function process(data) {
   if (isChild) {
     if (age<1) protFactor=2.0; else if (age<3) protFactor=1.8; else if (age<6) protFactor=1.5;
     else if (age<10) protFactor=1.2; else if (age<14) protFactor=1.0; else protFactor=1.0;
-  } else if (data.icu) protFactor=1.3;
+  } else if (data.burn) protFactor = (data.tbsa||0) >= 20 ? 2.25 : 1.75;  // ESPEN Burn 2013: 1.5-2 g/kg (<20% TBSA), 2-2.5 g/kg (≥20% TBSA)
+  else if (data.icu) protFactor=1.3;
   else if (data.cancer) protFactor=bmi>=25?1.3:1.5;        // Thai CPG: ≥25=อ้วน
   else if (data.dialysis) protFactor=1.2;
   else if (ckdStage>=3.5&&!data.dialysis) protFactor=0.6;   // CKD 3b-5: low-protein diet (KDOQI 2020)
   else if (ckdStage>=3&&!data.dialysis) protFactor=0.8;      // CKD 3a: mild restriction
   else if (data.liver&&data.liverStage==="cirrhosis") protFactor=1.2;
+  else if (data.surgery) protFactor=1.5;   // ESPEN Surgery 2017/2021: 1.5 g/kg ideal body weight
   else if (data.infection) protFactor=1.5;
   else if (age>=60) protFactor=1.2;
   else if (bmi>=25.0) protFactor=1.2;  // Thai CPG 2568: อ้วน ≥25 ต้องการโปรตีนเพิ่ม
@@ -482,6 +505,7 @@ function process(data) {
   // Guideline source
   let guidelineSource="ESPEN General";
   if (isChild) guidelineSource="ESPGHAN/ESPEN Pediatric 2018";
+  else if (data.burn) guidelineSource="ESPEN Burn 2013 (Nutritional Therapy in Major Burns)";
   else if (data.icu) guidelineSource="ESPEN ICU 2023";
   else if (data.cancer) guidelineSource="ESPEN Cancer 2021";
   else if (data.liver&&data.liverStage==="cirrhosis") guidelineSource="ESPEN Liver Disease 2020";
@@ -489,6 +513,7 @@ function process(data) {
   else if (ckdStage>=3.5&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3b-5) + KDIGO 2024";
   else if (ckdStage>=3&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3a) + KDIGO 2024";
   else if (data.dialysis) guidelineSource="KDOQI Nutrition CKD 2020";
+  else if (data.surgery) guidelineSource="ESPEN Surgery 2017/2021";
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
   else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
@@ -625,6 +650,15 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
   let a = [];
   if (isChild) a.push("คำนวณตามเกณฑ์โภชนาการเด็ก ESPGHAN");
   if (data.dm) a.push("ADA 2025: ควบคุมน้ำตาล เน้น low-GI ลดแป้งขัดสี เพิ่มใยอาหาร ≥14g/1000kcal");
+  if (data.burn) {
+    const tbsaVal = data.tbsa || 0;
+    a.push(`Burn (ESPEN 2013): TBSA ${tbsaVal}% — โปรตีน ${tbsaVal>=20?'2–2.5':'1.5–2'} g/kg/วัน เริ่ม Enteral Nutrition ให้เร็วที่สุด (early EN)`);
+    a.push("จำกัดกลูโคสไม่เกิน 55% ของพลังงานทั้งหมด และเสริมวิตามิน/แร่ธาตุ (วิตามิน C, สังกะสี, ซีลีเนียม) เนื่องจากสูญเสียทางแผลไฟไหม้");
+  }
+  if (data.surgery) a.push("ผ่าตัด (ESPEN Surgery): งดอดอาหารนานเกินจำเป็นก่อนผ่าตัด เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS) โปรตีน 1.5 g/kg/วัน");
+  if (data.stroke) a.push("Stroke (ESPEN Neurology 2018): คัดกรองภาวะกลืนลำบาก (dysphagia screening) ก่อนเริ่มอาหารทางปากทุกราย หากกลืนลำบากให้ปรับเนื้อสัมผัสอาหารและใช้ของเหลวข้น (thickened liquids) ป้องกันการสำลัก");
+  if (data.hypertension) a.push("ความดันโลหิตสูง (DASH/AHA-ACC 2025): จำกัดโซเดียม <2,300 มก./วัน (เป้าหมายเข้มงวด <1,500 มก./วัน) เน้นผัก ผลไม้ ธัญพืชไม่ขัดสี นมไขมันต่ำ ลดอาหารแปรรูป/หมักดอง");
+  if (data.hyperlipid) a.push("ไขมันในเลือดสูง (ACC/AHA Dyslipidemia Guideline): ลดไขมันอิ่มตัว/ไขมันทรานส์ เลือกไขมันไม่อิ่มตัวเชิงเดี่ยว/เชิงซ้อนแทน เพิ่มใยอาหารชนิดละลายน้ำ (ข้าวโอ๊ต ถั่ว ผลไม้) จำกัดคอเลสเตอรอลจากอาหาร");
   if (ckdStage>=3 && !data.dialysis) {
     if (ckdStage < 3.5) {
       // CKD Stage 3a: mild — protein slightly reduced, K/P ยังไม่จำกัดตามปกติ เว้นแต่ผลเลือดผิดปกติ
@@ -733,7 +767,7 @@ function generateMealPlan(ex, data) {
     ? ["แอปเปิ้ล 1 ผลเล็ก","องุ่น 10 เม็ด","สับปะรด 6 ชิ้นคำ","ลูกแพร์ 1 ผลเล็ก"]
     : data.dm?["ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","ชมพู่ 3 ผลกลาง","สาลี่ 1 ผลเล็ก","มะละกอสุก 6 ชิ้นคำ"]:isChild?["กล้วยน้ำว้า 1 ผล","มะละกอสุก 6 ชิ้นคำ","ส้มเขียวหวาน 1 ผล","แตงโม 6 ชิ้นคำ","องุ่น 10 เม็ด"]:["กล้วยน้ำว้า 1 ผล","มะละกอสุก 8 ชิ้นคำ","ส้มเขียวหวาน 2 ผลกลาง","ฝรั่ง 1 ผลเล็ก","แอปเปิ้ล 1 ผลเล็ก","แตงโม 8 ชิ้นคำ","ลำไย 5-6 ผล","ลองกอง 6-8 ผล","สับปะรด 8 ชิ้นคำ","ชมพู่ 3 ผลกลาง"];
 
-  const fatMenu = (data.cancer||data.icu)?["น้ำมันมะกอก","น้ำมันปลา","น้ำมันคาโนลา"]:["น้ำมันรำข้าว","น้ำมันมะกอก","น้ำมันถั่วเหลือง","น้ำมันพืช"];
+  const fatMenu = (data.cancer||data.icu||data.hyperlipid)?["น้ำมันมะกอก","น้ำมันปลา","น้ำมันคาโนลา"]:["น้ำมันรำข้าว","น้ำมันมะกอก","น้ำมันถั่วเหลือง","น้ำมันพืช"];
   const milkMenu = data.dm?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","โยเกิร์ต 0% ไขมัน 1 ถ้วย"]:isChild?["นมสดจืด 1 แก้ว (240 มล.)","นมครบส่วน 1 แก้ว (240 มล.)"]:isElderly?["นมพร่องมันเนย 1 แก้ว (240 มล.)","นม Hi-Calcium 1 กล่อง (200 มล.)","โยเกิร์ตไขมันต่ำ 1 ถ้วย"]:["นมพร่องมันเนย 1 แก้ว (240 มล.)","นมขาดมันเนย 1 ขวด (200 มล.)","นมสดจืด 1 แก้ว (240 มล.)"];
 
   const rand = (arr) => arr[Math.floor(Math.random()*arr.length)];
@@ -796,6 +830,7 @@ function calc() {
   if (liver.checked&&liverStage.value==="none"){alert("กรุณาเลือกชนิดโรคตับ");return;}
   if (cancer.checked&&cancerType.value==="none"){alert("กรุณาเลือกชนิดมะเร็ง");return;}
   if (dialysis.checked&&parseFloat(ckd.value)===0){alert("ผู้ป่วยฟอกไตควรระบุ CKD Stage ด้วย");return;}
+  if (burn.checked&&(!tbsa.value||parseFloat(tbsa.value)<=0||parseFloat(tbsa.value)>100)){alert("กรุณาระบุ %TBSA (พื้นที่ผิวไฟไหม้) ให้ถูกต้อง (1-100)");return;}
 
   showLoading('กำลังคำนวณ...');
 
@@ -806,7 +841,9 @@ function calc() {
         age:age.value, gender:gender.value, weight:weight.value, height:height.value,
         patientType:patientCategory.value+"_"+(parseInt(age.value)<18?"Pediatric":parseInt(age.value)>=60?"Elderly":"Adult"),
         dm:dm.checked, ckdStage:parseFloat(ckd.value), dialysis:dialysis.checked, infection:infection.checked,
-        liver:liver.checked, liverStage:liverStage.value, cancer:cancer.checked, cancerType:cancerType.value, icu:icu.checked
+        liver:liver.checked, liverStage:liverStage.value, cancer:cancer.checked, cancerType:cancerType.value, icu:icu.checked,
+        surgery:surgery.checked, stroke:stroke.checked, burn:burn.checked, tbsa:parseFloat(tbsa.value)||0,
+        hyperlipid:hyperlipid.checked, hypertension:hypertension.checked
       };
       const r = process(d);
       lastR = r;
@@ -961,7 +998,10 @@ async function saveRecord() {
     dialysis:document.getElementById('dialysis').checked, infection:document.getElementById('infection').checked,
     liver:document.getElementById('liver').checked, liverStage:document.getElementById('liverStage').value,
     cancer:document.getElementById('cancer').checked, cancerType:document.getElementById('cancerType').value,
-    icu:document.getElementById('icu').checked
+    icu:document.getElementById('icu').checked,
+    surgery:document.getElementById('surgery').checked, stroke:document.getElementById('stroke').checked,
+    burn:document.getElementById('burn').checked, tbsa:parseFloat(document.getElementById('tbsa').value)||0,
+    hyperlipid:document.getElementById('hyperlipid').checked, hypertension:document.getElementById('hypertension').checked
   };
   let resultToSave = {...lastR, kcal:parseInt(document.getElementById('res-kcal').value), protein:parseInt(document.getElementById('res-prot').value)};
 
@@ -1215,9 +1255,19 @@ document.getElementById('calcBtn').addEventListener('click', calc);
       • หลีกเลี่ยงอาหารแปรรูป/กระป๋องที่มีสารกันบูดฟอสเฟต โดยเฉพาะ Stage 4-5
     </div>
   </div>
+  <div style="background:#f0f9ff; border-radius:10px; padding:12px; margin-bottom:10px;">
+    <div style="font-weight:600; font-size:13px; color:#0369a1; margin-bottom:6px;">🏥 ผ่าตัด / Burn / Stroke / NCDs</div>
+    <div style="font-size:11px; color:#0c4a6e; line-height:1.9;">
+      • <b>ผ่าตัด (ESPEN Surgery 2017/2021)</b>: พลังงาน 25–30 kcal/kg + โปรตีน 1.5 g/kg IBW งดอดอาหารนานเกินจำเป็น เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS)<br>
+      • <b>Burn (ESPEN 2013)</b>: โปรตีน 1.5–2 g/kg (TBSA &lt;20%) หรือ 2–2.5 g/kg (TBSA ≥20%) พลังงานประมาณ 30–40 kcal/kg ตามความรุนแรง — ควรใช้ Indirect Calorimetry/Toronto Equation แทนหากทำได้ เพื่อลดความเสี่ยง Overfeeding<br>
+      • <b>Stroke (ESPEN Neurology 2018)</b>: คัดกรองภาวะกลืนลำบากทุกราย ปรับเนื้อสัมผัสอาหาร/ของเหลวข้นหากมีความเสี่ยงสำลัก หากต้องผ่าตัด (เช่น craniotomy) ให้ใช้เกณฑ์ผ่าตัดร่วมด้วย<br>
+      • <b>ความดันโลหิตสูง (DASH/AHA-ACC 2025)</b>: โซเดียม &lt;2,300 มก./วัน (เข้มงวด &lt;1,500 มก./วัน) เน้นผัก-ผลไม้-ธัญพืชไม่ขัดสี-นมไขมันต่ำ<br>
+      • <b>ไขมันในเลือดสูง (ACC/AHA Dyslipidemia)</b>: ลดไขมันอิ่มตัว/ทรานส์ เลือกไขมันไม่อิ่มตัว เพิ่มใยอาหารละลายน้ำ จำกัดคอเลสเตอรอลจากอาหาร
+    </div>
+  </div>
   <div style="background:#f8fafc; border-radius:10px; padding:12px; font-size:11px; color:#64748b; line-height:1.8;">
     <div style="font-weight:600; color:#334155; margin-bottom:4px;">📌 แหล่งอ้างอิง</div>
-    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2025 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
+    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2017/2021 · ESPEN Burn 2013 · ESPEN Neurology (Stroke) 2018 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · DASH/AHA-ACC Hypertension 2025 · ACC/AHA Dyslipidemia Guideline · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
     <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:10px;">โปรตีน/โพแทสเซียมรายระยะ 3a-3b: สอดคล้องแนวทางปฏิบัติทางคลินิกที่ใช้กันทั่วไป (protein 3a 0.8–1.0 g/kg, 3b 0.6–0.8 g/kg; K ไม่จำกัดถึง 3a, 3b &lt;2,000 มก./วัน, 4-5 &lt;1,500 มก./วัน) — ควรปรับตามผลเลือดจริงของผู้ป่วยและดุลยพินิจของทีมรักษาเสมอ</div>
   </div>
 </div>
