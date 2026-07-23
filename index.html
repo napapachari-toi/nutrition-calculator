@@ -163,30 +163,43 @@
       <label class="status-item"><input type="checkbox" id="liver"><span>โรคตับ (Liver)</span></label>
       <label class="status-item"><input type="checkbox" id="cancer"><span>มะเร็ง (Cancer)</span></label>
       <label class="status-item"><input type="checkbox" id="icu"><span>ผู้ป่วยวิกฤต (ICU)</span></label>
-      <label class="status-item"><input type="checkbox" id="surgery"><span>ผ่าตัด (Surgery)</span></label>
       <label class="status-item"><input type="checkbox" id="stroke"><span>หลอดเลือดสมอง (Stroke)</span></label>
       <label class="status-item"><input type="checkbox" id="hyperlipid"><span>ไขมันในเลือดสูง</span></label>
-      <label class="status-item"><input type="checkbox" id="hypertension"><span>ความดันโลหิตสูง</span></label>
-      <div style="display:flex; align-items:center; background:#fef2f2; padding:8px; border-radius:8px; border:1px solid #fecaca; grid-column: span 2;">
-        <label class="status-item" style="background:none; border:none; padding:0; flex:0 0 auto;"><input type="checkbox" id="burn"><span style="white-space:nowrap;">🔥 Burn (แผลไฟไหม้/น้ำร้อนลวก)</span></label>
-        <span style="font-size:11px; margin:0 6px; font-weight:600; white-space:nowrap;">%TBSA:</span>
-        <input type="number" id="tbsa" placeholder="เช่น 25" min="1" max="100" style="margin:0; padding:4px; width:70px; margin-bottom:0;">
+      <label class="status-item" style="grid-column: span 2;"><input type="checkbox" id="hypertension"><span>ความดันโลหิตสูง</span></label>
+      <div style="display:flex; align-items:center; background:#fdf4ff; padding:6px 8px; border-radius:8px; border:1px solid #f0abfc; gap:4px;">
+        <input type="checkbox" id="pressureInjury" style="width:16px; height:16px; margin:0; flex:0 0 auto; cursor:pointer;">
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap; cursor:pointer;" onclick="document.getElementById('pressureInjury').click()">แผลกดทับ</span>
+        <select id="piStage" style="margin:0; padding:2px; font-size:11px; flex:1; min-width:0; margin-bottom:0;">
+          <option value="1-2">St.I-II</option><option value="3-4">St.III-IV</option>
+        </select>
       </div>
-      <div style="display:flex; align-items:center; background:#eff6ff; padding:8px; border-radius:8px; border:1px solid #dbeafe;">
-        <span style="font-size:11px; margin-right:5px; font-weight:600;">CKD Stage:</span>
-        <select id="ckd" style="margin:0; padding:2px; width:82px; margin-bottom:0;">
+      <div style="display:flex; align-items:center; background:#fef2f2; padding:6px 8px; border-radius:8px; border:1px solid #fecaca; gap:4px;">
+        <input type="checkbox" id="burn" style="width:16px; height:16px; margin:0; flex:0 0 auto; cursor:pointer;">
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap; cursor:pointer;" onclick="document.getElementById('burn').click()">🔥 Burn %TBSA</span>
+        <input type="number" id="tbsa" placeholder="25" min="1" max="100" style="margin:0; padding:2px 4px; font-size:11px; width:44px; flex:0 0 auto; margin-bottom:0;">
+      </div>
+      <div style="display:flex; align-items:center; background:#eef2ff; padding:6px 8px; border-radius:8px; border:1px solid #c7d2fe; gap:4px;">
+        <input type="checkbox" id="surgery" style="width:16px; height:16px; margin:0; flex:0 0 auto; cursor:pointer;">
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap; cursor:pointer;" onclick="document.getElementById('surgery').click()">ผ่าตัด</span>
+        <select id="surgeryType" style="margin:0; padding:2px; font-size:11px; flex:1; min-width:0; margin-bottom:0;">
+          <option value="minor">เล็ก</option><option value="major">ใหญ่</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; background:#eff6ff; padding:6px 8px; border-radius:8px; border:1px solid #dbeafe; gap:4px;">
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap;">CKD Stage:</span>
+        <select id="ckd" style="margin:0; padding:2px; font-size:11px; flex:1; min-width:0; margin-bottom:0;">
           <option value="0">0 (ปกติ)</option><option value="3">3a</option><option value="3.5">3b</option><option value="4">4</option><option value="5">5</option>
         </select>
       </div>
-      <div style="display:flex; align-items:center; background:#fff7ed; padding:8px; border-radius:8px; border:1px solid #fed7aa; grid-column: span 2;">
-        <span style="font-size:11px; margin-right:5px; font-weight:600; white-space:nowrap;">Liver:</span>
-        <select id="liverStage" style="margin:0; padding:2px; flex:1; min-width:0; margin-bottom:0;">
+      <div style="display:flex; align-items:center; background:#fff7ed; padding:6px 8px; border-radius:8px; border:1px solid #fed7aa; grid-column: span 2; gap:4px;">
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap;">Liver:</span>
+        <select id="liverStage" style="margin:0; padding:2px; font-size:11px; flex:1; min-width:0; margin-bottom:0;">
           <option value="none">-</option><option value="nafld">NAFLD/NASH</option><option value="cirrhosis">Cirrhosis</option>
         </select>
-        <span style="font-size:11px; margin:0 5px; font-weight:600; white-space:nowrap;">Cancer:</span>
-        <select id="cancerType" style="margin:0; padding:2px; flex:1; min-width:0; margin-bottom:0;">
-          <option value="none">-</option><option value="solid">Solid Tumor</option>
-          <option value="hematologic">Hematologic</option><option value="head_neck">Head & Neck</option><option value="gi">GI Cancer</option>
+        <span style="font-size:11.5px; font-weight:600; white-space:nowrap;">Cancer:</span>
+        <select id="cancerType" style="margin:0; padding:2px; font-size:11px; flex:1; min-width:0; margin-bottom:0;">
+          <option value="none">-</option><option value="solid">Solid</option>
+          <option value="hematologic">Hema</option><option value="head_neck">H&N</option><option value="gi">GI</option>
         </select>
       </div>
     </div>
@@ -437,9 +450,26 @@ function process(data) {
   } else if (data.liver && data.liverStage==="cirrhosis") {
     kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:35;
     clinicalNote = "Cirrhosis: 30–35 kcal/kg หลีกเลี่ยง Overfeeding";
+  } else if (data.pressureInjury) {
+    // EPUAP/NPIAP/PPPIA 2019 (Pressure Injury): 30-35 kcal/kg สำหรับผู้ป่วยที่มีความเสี่ยง/เป็นแผลกดทับ
+    kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:32;
+    clinicalNote = `แผลกดทับ Stage ${data.piStage||'1-2'}: 30–35 kcal/kg (EPUAP/NPIAP/PPPIA 2019) เสริมอาร์จินีน/สังกะสี/วิตามินซีช่วยการหายของแผล`;
   } else if (data.surgery) {
-    kcalLow=25; kcalHigh=30; kcalFactor=27;
-    clinicalNote = "ผ่าตัด (Surgery): 25–30 kcal/kg (ESPEN Surgery) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS";
+    // ESPEN Surgery 2017/2021: 25-30 kcal/kg เป็นค่าตั้งต้น แต่ต้องปรับตามอายุ/BMI
+    // เช่นเดียวกับเงื่อนไขอื่น (cancer, cirrhosis) เพื่อไม่ให้ผู้ป่วยผ่าตัดได้พลังงานต่ำกว่าเกณฑ์พื้นฐานที่ควรได้รับ
+    const surgLabel = data.surgeryType==="major" ? "ผ่าตัดใหญ่" : "ผ่าตัดเล็ก";
+    if (bmi >= 25.0) {
+      // อ้วน+ผ่าตัด: ยังต้องป้องกัน Overfeeding เหมือนหลักการทั่วไป ใช้ AdjBW + 20-25 kcal/kg
+      kcalLow=20; kcalHigh=25; kcalFactor=22;
+      clinicalNote = `${surgLabel} + อ้วน (BMI≥25): ใช้ AdjBW × 20–25 kcal/kg ป้องกัน Overfeeding (ESPEN Surgery + Thai CPG 2568)`;
+    } else if (age >= 60) {
+      // ผู้สูงอายุ+ผ่าตัด: ความเครียดจากการผ่าตัดร่วมกับอายุ ต้องการพลังงานไม่น้อยกว่าเกณฑ์ผู้สูงอายุทั่วไป
+      kcalLow=28; kcalHigh=32; kcalFactor=30;
+      clinicalNote = `${surgLabel} + ผู้สูงอายุ: 28–32 kcal/kg (ESPEN Surgery + ESPEN Geriatric) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS`;
+    } else {
+      kcalLow=25; kcalHigh=30; kcalFactor=27;
+      clinicalNote = `${surgLabel}: 25–30 kcal/kg (ESPEN Surgery) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS`;
+    }
   } else if (data.infection) {
     kcalLow=25; kcalHigh=30; kcalFactor=30;
     clinicalNote = "ติดเชื้อ: 25–30 kcal/kg ตาม ESPEN Polymorbid";
@@ -474,6 +504,7 @@ function process(data) {
   const kcalRangeHigh = Math.round(usedWeight * kcalHigh);
 
   let protFactor;
+  let surgeryBranchApplied = false;
   if (isChild) {
     if (age<1) protFactor=2.0; else if (age<3) protFactor=1.8; else if (age<6) protFactor=1.5;
     else if (age<10) protFactor=1.2; else if (age<14) protFactor=1.0; else protFactor=1.0;
@@ -484,11 +515,23 @@ function process(data) {
   else if (ckdStage>=3.5&&!data.dialysis) protFactor=0.6;   // CKD 3b-5: low-protein diet (KDOQI 2020)
   else if (ckdStage>=3&&!data.dialysis) protFactor=0.8;      // CKD 3a: mild restriction
   else if (data.liver&&data.liverStage==="cirrhosis") protFactor=1.2;
-  else if (data.surgery) protFactor=1.5;   // ESPEN Surgery 2017/2021: 1.5 g/kg ideal body weight
+  else if (data.pressureInjury) protFactor = data.piStage==="3-4" ? 1.75 : 1.375;  // EPUAP/NPIAP/PPPIA 2019: Stage I-II 1.25-1.5 g/kg, Stage III-IV/severe ~1.5-2 g/kg
+  else if (data.surgery) { protFactor=1.5; surgeryBranchApplied=true; }   // ESPEN Surgery 2017/2021: 1.5 g/kg ideal body weight
   else if (data.infection) protFactor=1.5;
   else if (age>=60) protFactor=1.2;
   else if (bmi>=25.0) protFactor=1.2;  // Thai CPG 2568: อ้วน ≥25 ต้องการโปรตีนเพิ่ม
   else protFactor=1.0;
+
+  // ผ่าตัดใหญ่ (Major Surgery) + อ้วน (BMI≥25): ยกโปรตีนขึ้นตาม ASPEN Obesity Guideline
+  // (IBW × 2.0 g/kg สำหรับ BMI 30-40, IBW × 2.5 g/kg สำหรับ BMI ≥40 — ใช้เกณฑ์ BMI สากล ไม่ใช่เกณฑ์คนไทย
+  // เพราะเป็นค่าที่อ้างอิงจากงานวิจัยกลุ่มประชากรที่ศึกษาโดยตรง) เพื่อรักษา lean mass ระหว่างให้พลังงานแบบ hypocaloric
+  // สำคัญ: ใช้ surgeryBranchApplied เพื่อยืนยันว่าไม่มีเงื่อนไขที่มีความสำคัญกว่า (CKD, dialysis, cirrhosis,
+  // pressure injury, cancer, ICU, burn) มาบังคับใช้ค่าโปรตีนที่เข้มงวดกว่าอยู่ก่อนแล้ว — ความปลอดภัยของไต/ตับ
+  // ต้องมาก่อนการยกโปรตีนเพื่อรักษา lean mass เสมอ
+  if (surgeryBranchApplied && !isChild && data.surgeryType==="major" && bmi>=25.0) {
+    const aspenTargetProtein = ibw * (bmi>=40 ? 2.5 : 2.0);
+    protFactor = aspenTargetProtein / usedWeight;
+  }
 
   const protein = Math.round(usedWeight*protFactor);
 
@@ -513,7 +556,8 @@ function process(data) {
   else if (ckdStage>=3.5&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3b-5) + KDIGO 2024";
   else if (ckdStage>=3&&!data.dialysis) guidelineSource="KDOQI 2020 (CKD 3a) + KDIGO 2024";
   else if (data.dialysis) guidelineSource="KDOQI Nutrition CKD 2020";
-  else if (data.surgery) guidelineSource="ESPEN Surgery 2017/2021";
+  else if (data.pressureInjury) guidelineSource="EPUAP/NPIAP/PPPIA 2019 (Pressure Injury)";
+  else if (data.surgery) guidelineSource = (data.surgeryType==="major" && bmi>=25.0) ? "ESPEN Surgery 2017/2021 + ASPEN Obesity Guideline" : "ESPEN Surgery 2017/2021";
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
   else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
@@ -655,7 +699,26 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
     a.push(`Burn (ESPEN 2013): TBSA ${tbsaVal}% — โปรตีน ${tbsaVal>=20?'2–2.5':'1.5–2'} g/kg/วัน เริ่ม Enteral Nutrition ให้เร็วที่สุด (early EN)`);
     a.push("จำกัดกลูโคสไม่เกิน 55% ของพลังงานทั้งหมด และเสริมวิตามิน/แร่ธาตุ (วิตามิน C, สังกะสี, ซีลีเนียม) เนื่องจากสูญเสียทางแผลไฟไหม้");
   }
-  if (data.surgery) a.push("ผ่าตัด (ESPEN Surgery): งดอดอาหารนานเกินจำเป็นก่อนผ่าตัด เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS) โปรตีน 1.5 g/kg/วัน");
+  if (data.pressureInjury) {
+    const stg = data.piStage||"1-2";
+    a.push(`แผลกดทับ Stage ${stg} (EPUAP/NPIAP/PPPIA 2019): โปรตีน ${stg==="3-4"?"1.5–2":"1.25–1.5"} g/kg/วัน เสริมสูตรอาหาร/ONS ที่มีอาร์จินีน สังกะสี วิตามินซี และสารต้านอนุมูลอิสระ ช่วยสมานแผล`);
+    a.push("จัดท่า/พลิกตัวสม่ำเสมอร่วมกับการดูแลโภชนาการ เนื่องจากโภชนาการเพียงอย่างเดียวไม่ทดแทนการลดแรงกดทับ");
+  }
+  if (data.surgery) {
+    const surgLabel = data.surgeryType==="major" ? "ผ่าตัดใหญ่" : "ผ่าตัดเล็ก";
+    // ตรวจว่าผ่าตัดเป็นเงื่อนไขหลักที่กำหนดโปรตีนจริงหรือไม่ (ต้องไม่มีเงื่อนไขที่สำคัญกว่าอย่าง
+    // burn/ICU/cancer/dialysis/CKD/cirrhosis/แผลกดทับ มาบังคับค่าที่เข้มงวด/แตกต่างกว่าอยู่ก่อน)
+    // ป้องกันไม่ให้คำแนะนำขัดแย้งกับตัวเลขโปรตีนที่คำนวณจริง
+    const surgeryIsPrimaryDriver = !data.burn && !data.icu && !data.cancer && !data.dialysis &&
+      !(ckdStage>=3 && !data.dialysis) && !(data.liver && data.liverStage==="cirrhosis") && !data.pressureInjury;
+    if (surgeryIsPrimaryDriver && data.surgeryType==="major" && bmi>=25.0 && !isChild) {
+      a.push(`${surgLabel} + อ้วน (ASPEN Obesity Guideline): ยกโปรตีนเป็น IBW × ${bmi>=40?'2.5':'2.0'} g/kg/วัน (สูงกว่ามาตรฐาน 1.5 g/kg) เพื่อรักษา lean mass ระหว่างพลังงานแบบ hypocaloric ป้องกัน Overfeeding`);
+    } else if (surgeryIsPrimaryDriver) {
+      a.push(`${surgLabel} (ESPEN Surgery): งดอดอาหารนานเกินจำเป็นก่อนผ่าตัด เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS) โปรตีน 1.5 g/kg/วัน`);
+    } else {
+      a.push(`${surgLabel}: งดอดอาหารนานเกินจำเป็นก่อนผ่าตัด เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS) — เป้าหมายพลังงาน/โปรตีนให้ยึดตามเงื่อนไขที่เข้มงวดกว่าข้างต้นเป็นหลัก`);
+    }
+  }
   if (data.stroke) a.push("Stroke (ESPEN Neurology 2018): คัดกรองภาวะกลืนลำบาก (dysphagia screening) ก่อนเริ่มอาหารทางปากทุกราย หากกลืนลำบากให้ปรับเนื้อสัมผัสอาหารและใช้ของเหลวข้น (thickened liquids) ป้องกันการสำลัก");
   if (data.hypertension) a.push("ความดันโลหิตสูง (DASH/AHA-ACC 2025): จำกัดโซเดียม <2,300 มก./วัน (เป้าหมายเข้มงวด <1,500 มก./วัน) เน้นผัก ผลไม้ ธัญพืชไม่ขัดสี นมไขมันต่ำ ลดอาหารแปรรูป/หมักดอง");
   if (data.hyperlipid) a.push("ไขมันในเลือดสูง (ACC/AHA Dyslipidemia Guideline): ลดไขมันอิ่มตัว/ไขมันทรานส์ เลือกไขมันไม่อิ่มตัวเชิงเดี่ยว/เชิงซ้อนแทน เพิ่มใยอาหารชนิดละลายน้ำ (ข้าวโอ๊ต ถั่ว ผลไม้) จำกัดคอเลสเตอรอลจากอาหาร");
@@ -842,7 +905,8 @@ function calc() {
         patientType:patientCategory.value+"_"+(parseInt(age.value)<18?"Pediatric":parseInt(age.value)>=60?"Elderly":"Adult"),
         dm:dm.checked, ckdStage:parseFloat(ckd.value), dialysis:dialysis.checked, infection:infection.checked,
         liver:liver.checked, liverStage:liverStage.value, cancer:cancer.checked, cancerType:cancerType.value, icu:icu.checked,
-        surgery:surgery.checked, stroke:stroke.checked, burn:burn.checked, tbsa:parseFloat(tbsa.value)||0,
+        surgery:surgery.checked, surgeryType:surgeryType.value, stroke:stroke.checked, burn:burn.checked, tbsa:parseFloat(tbsa.value)||0,
+        pressureInjury:pressureInjury.checked, piStage:piStage.value,
         hyperlipid:hyperlipid.checked, hypertension:hypertension.checked
       };
       const r = process(d);
@@ -999,7 +1063,9 @@ async function saveRecord() {
     liver:document.getElementById('liver').checked, liverStage:document.getElementById('liverStage').value,
     cancer:document.getElementById('cancer').checked, cancerType:document.getElementById('cancerType').value,
     icu:document.getElementById('icu').checked,
-    surgery:document.getElementById('surgery').checked, stroke:document.getElementById('stroke').checked,
+    surgery:document.getElementById('surgery').checked, surgeryType:document.getElementById('surgeryType').value,
+    stroke:document.getElementById('stroke').checked,
+    pressureInjury:document.getElementById('pressureInjury').checked, piStage:document.getElementById('piStage').value,
     burn:document.getElementById('burn').checked, tbsa:parseFloat(document.getElementById('tbsa').value)||0,
     hyperlipid:document.getElementById('hyperlipid').checked, hypertension:document.getElementById('hypertension').checked
   };
@@ -1258,7 +1324,9 @@ document.getElementById('calcBtn').addEventListener('click', calc);
   <div style="background:#f0f9ff; border-radius:10px; padding:12px; margin-bottom:10px;">
     <div style="font-weight:600; font-size:13px; color:#0369a1; margin-bottom:6px;">🏥 ผ่าตัด / Burn / Stroke / NCDs</div>
     <div style="font-size:11px; color:#0c4a6e; line-height:1.9;">
-      • <b>ผ่าตัด (ESPEN Surgery 2017/2021)</b>: พลังงาน 25–30 kcal/kg + โปรตีน 1.5 g/kg IBW งดอดอาหารนานเกินจำเป็น เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS)<br>
+      • <b>ผ่าตัดเล็ก/ใหญ่ (ESPEN Surgery 2017/2021)</b>: พลังงาน 25–30 kcal/kg IBW + โปรตีน 1.5 g/kg IBW งดอดอาหารนานเกินจำเป็น เริ่มอาหารทางปากเร็วที่สุดหลังผ่าตัด (ERAS)<br>
+      • <b>ผ่าตัดใหญ่ + อ้วน (BMI≥25) (ASPEN Obesity)</b>: ยกโปรตีนเป็น IBW × 2.0 g/kg (BMI 30–40) หรือ IBW × 2.5 g/kg (BMI ≥40) โดยพลังงานยังคงใช้ AdjBW × 20–25 kcal/kg ป้องกัน Overfeeding — ผ่าตัดเล็กไม่ต้องยกโปรตีนขึ้นระดับนี้<br>
+      • <b>แผลกดทับ (EPUAP/NPIAP/PPPIA 2019)</b>: พลังงาน 30–35 kcal/kg โปรตีน 1.25–1.5 g/kg (Stage I-II) หรือ 1.5–2 g/kg (Stage III-IV/แผลหลายตำแหน่ง) เสริมอาร์จินีน สังกะสี วิตามินซี ร่วมกับการลดแรงกดทับ<br>
       • <b>Burn (ESPEN 2013)</b>: โปรตีน 1.5–2 g/kg (TBSA &lt;20%) หรือ 2–2.5 g/kg (TBSA ≥20%) พลังงานประมาณ 30–40 kcal/kg ตามความรุนแรง — ควรใช้ Indirect Calorimetry/Toronto Equation แทนหากทำได้ เพื่อลดความเสี่ยง Overfeeding<br>
       • <b>Stroke (ESPEN Neurology 2018)</b>: คัดกรองภาวะกลืนลำบากทุกราย ปรับเนื้อสัมผัสอาหาร/ของเหลวข้นหากมีความเสี่ยงสำลัก หากต้องผ่าตัด (เช่น craniotomy) ให้ใช้เกณฑ์ผ่าตัดร่วมด้วย<br>
       • <b>ความดันโลหิตสูง (DASH/AHA-ACC 2025)</b>: โซเดียม &lt;2,300 มก./วัน (เข้มงวด &lt;1,500 มก./วัน) เน้นผัก-ผลไม้-ธัญพืชไม่ขัดสี-นมไขมันต่ำ<br>
@@ -1267,8 +1335,9 @@ document.getElementById('calcBtn').addEventListener('click', calc);
   </div>
   <div style="background:#f8fafc; border-radius:10px; padding:12px; font-size:11px; color:#64748b; line-height:1.8;">
     <div style="font-weight:600; color:#334155; margin-bottom:4px;">📌 แหล่งอ้างอิง</div>
-    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2017/2021 · ESPEN Burn 2013 · ESPEN Neurology (Stroke) 2018 · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · DASH/AHA-ACC Hypertension 2025 · ACC/AHA Dyslipidemia Guideline · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
+    ESPEN Geriatric 2022 · ESPEN Polymorbid 2023 · ESPEN Liver 2020 · ESPEN Cancer 2021 · ESPEN ICU 2023 · ESPEN Surgery 2017/2021 · ESPEN Burn 2013 · ESPEN Neurology (Stroke) 2018 · EPUAP/NPIAP/PPPIA 2019 (Pressure Injury) · ASPEN/SCCM Obesity Guideline · KDOQI CKD 2020 · KDIGO 2024 · ADA Standards of Care 2025 · ESPGHAN Pediatric 2018 · WHO Asia-Pacific 2000 · DASH/AHA-ACC Hypertension 2025 · ACC/AHA Dyslipidemia Guideline · <b>Thai Obesity CPG ชมรมโรคอ้วนแห่งประเทศไทย พ.ศ.2568</b>
     <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:10px;">โปรตีน/โพแทสเซียมรายระยะ 3a-3b: สอดคล้องแนวทางปฏิบัติทางคลินิกที่ใช้กันทั่วไป (protein 3a 0.8–1.0 g/kg, 3b 0.6–0.8 g/kg; K ไม่จำกัดถึง 3a, 3b &lt;2,000 มก./วัน, 4-5 &lt;1,500 มก./วัน) — ควรปรับตามผลเลือดจริงของผู้ป่วยและดุลยพินิจของทีมรักษาเสมอ</div>
+    <div style="margin-top:4px; padding-top:4px; border-top:1px dashed #e2e8f0; font-size:10px;">ผ่าตัดใหญ่+อ้วน: การยกโปรตีนเป็น IBW×2.0-2.5 g/kg อ้างอิงจาก ASPEN/SCCM Obesity Guideline (งานวิจัยกลุ่มผู้ป่วยวิกฤต/ผ่าตัดใหญ่ที่มีภาวะอ้วน) ไม่ใช่ตัวเลขจาก ESPEN Surgery โดยตรง — ใช้เกณฑ์ BMI สากล (30, 40) ไม่ใช่เกณฑ์คนไทย เนื่องจากเป็นค่าที่อ้างอิงจากประชากรที่ศึกษาโดยตรง</div>
   </div>
 </div>
 <script>
