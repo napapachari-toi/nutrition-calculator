@@ -477,19 +477,21 @@ function process(data) {
     // Underweight: เพิ่มพลังงาน แต่ระวัง Refeeding Syndrome
     kcalLow=30; kcalHigh=35; kcalFactor=35;
     clinicalNote = "น้ำหนักน้อย: เริ่ม 30 kcal/kg ระวัง Refeeding Syndrome";
+  } else if (bmi >= 25.0) {
+    // Thai CPG 2568: BMI ≥25 = อ้วน → ใช้ AdjBW + 20–25 kcal/kg (ESPEN) ป้องกัน Overfeeding
+    // ต้องเช็คก่อนเกณฑ์ผู้สูงอายุเสมอ (เช่นเดียวกับ surgery/cancer/cirrhosis/pressure injury) เพราะถ้าปล่อยให้
+    // เกณฑ์ผู้สูงอายุ (28-30 kcal/kg) มาก่อน ผู้สูงอายุที่อ้วนจะได้พลังงานสูงเกินไป ขัดกับหลักป้องกัน Overfeeding
+    const elderlyPrefix = age>=60 ? "ผู้สูงอายุ + " : "";
+    if (data.icu || data.infection) {
+      kcalLow=20; kcalHigh=22; kcalFactor=20;
+      clinicalNote = `${elderlyPrefix}อ้วน + ภาวะเฉียบพลัน (Thai BMI≥25): AdjBW × 20–22 kcal/kg`;
+    } else {
+      kcalLow=20; kcalHigh=25; kcalFactor=22;
+      clinicalNote = `${elderlyPrefix}อ้วน (Thai CPG 2568, BMI≥25): ใช้ AdjBW × 20–25 kcal/kg [ESPEN] ป้องกัน Overfeeding`;
+    }
   } else if (age >= 60) {
     kcalLow=28; kcalHigh=30; kcalFactor=30;
     clinicalNote = "ผู้สูงอายุ: 28–30 kcal/kg ตาม ESPEN Geriatric 2022";
-  } else if (bmi >= 25.0) {
-    // Thai CPG 2568: BMI ≥25 = อ้วน → ใช้ AdjBW + 20–25 kcal/kg (ESPEN)
-    // Acute condition → 20-22, Weight control → 20, General → 20-25
-    if (data.icu || data.infection) {
-      kcalLow=20; kcalHigh=22; kcalFactor=20;
-      clinicalNote = "อ้วน + ภาวะเฉียบพลัน (Thai BMI≥25): AdjBW × 20–22 kcal/kg";
-    } else {
-      kcalLow=20; kcalHigh=25; kcalFactor=22;
-      clinicalNote = "อ้วน (Thai CPG 2568, BMI≥25): ใช้ AdjBW × 20–25 kcal/kg [ESPEN] ป้องกัน Overfeeding";
-    }
   } else if (data.liver && data.liverStage==="nafld") {
     kcalLow=20; kcalHigh=25; kcalFactor=25;
     clinicalNote = "NAFLD/NASH: ลดพลังงาน 500–750 kcal/วัน จากปกติ";
@@ -560,8 +562,8 @@ function process(data) {
   else if (data.surgery) guidelineSource = (data.surgeryType==="major" && bmi>=25.0) ? "ESPEN Surgery 2017/2021 + ASPEN Obesity Guideline" : "ESPEN Surgery 2017/2021";
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
-  else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
   else if (bmi>=25.0) guidelineSource="Thai Obesity CPG พ.ศ.2568 + ESPEN 20–25 kcal/kg";
+  else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
 
   const ex = calculateExchangesLogic(kcal,protein,data.dm,ckdStage,data.dialysis,data.liver,data.liverStage,data.cancer,data.icu,data.infection);
   const advice = generateAdvice(data,bmi,ckdStage,isChild,age);
@@ -744,7 +746,8 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
   if (bmi >= 23 && bmi < 25) a.push("น้ำหนักเกิน At Risk (Thai CPG: BMI 23–24.9): ระวังความเสี่ยงโรคเรื้อรัง ควบคุมพลังงาน");
   if (!isChild && bmi >= 25) a.push("โรคอ้วน (Thai CPG 2568: BMI≥25): ใช้ AdjBW คำนวณ 20–25 kcal/kg ป้องกัน Overfeeding");
   if (isChild && bmi >= 25) a.push("เด็กอ้วน: ใช้ IBW คำนวณพลังงานตาม ESPGHAN");
-  if (age >= 60) a.push("ผู้สูงอายุ: พลังงาน 30 kcal โปรตีน 1.2 g/kg");
+  if (age >= 60 && bmi >= 25.0) a.push("ผู้สูงอายุ + อ้วน: ใช้เกณฑ์ป้องกัน Overfeeding ข้างต้น (AdjBW × 20–25 kcal/kg) แทนเกณฑ์ผู้สูงอายุทั่วไป (28–30 kcal/kg) แต่โปรตีนยังคงหลักการผู้สูงอายุที่ 1.2 g/kg");
+  else if (age >= 60) a.push("ผู้สูงอายุ: พลังงาน 28–30 kcal/kg โปรตีน 1.2 g/kg (ESPEN Geriatric 2022)");
   if (ckdStage>=3 && !data.dialysis) a.push("KDIGO 2024: เพิ่มอาหารจากพืช ลดเนื้อแดงและอาหารแปรรูป");
   if (data.dialysis) a.push("KDIGO 2024: เพิ่มโปรตีนจากพืช ร่วมกับสัตว์ เพื่อลด uremic toxin");
   return a;
@@ -950,7 +953,7 @@ function updateUI(r) {
   document.getElementById('res-diag').style.color = bColor[1];
   let tag = "";
   if (r.isChild) tag = "👶 (เด็ก — คำนวณตาม ESPGHAN)";
-  else if (r.age >= 60) tag = "🧓 (ผู้สูงอายุ — ESPEN Geriatric)";
+  else if (r.age >= 60) tag = (r.guidelineSource && r.guidelineSource.indexOf("Geriatric") !== -1) ? "🧓 (ผู้สูงอายุ — ESPEN Geriatric)" : "🧓 (ผู้สูงอายุ)";
   document.getElementById('elderly-tag').innerText = tag;
   let currentKcal = parseFloat(document.getElementById('res-kcal').value);
   let currentProt = parseFloat(document.getElementById('res-prot').value);
