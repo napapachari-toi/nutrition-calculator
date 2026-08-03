@@ -425,12 +425,14 @@ function process(data) {
   // อ้างอิง: ESPEN Clinical Nutrition Guideline + Thai Obesity CPG 2568
   // BMI ≥25 (Thai อ้วน) → ใช้ AdjBW + kcal 20–25 kcal/kg เพื่อป้องกัน Overfeeding
   let kcalFactor, kcalLow, kcalHigh, clinicalNote;
+  let kcalDriver = ''; // tracks which condition actually determined the energy target, so advice text never contradicts the real number
 
   if (isChild) {
     if (age<1) kcalFactor=100; else if (age<3) kcalFactor=95; else if (age<6) kcalFactor=85;
     else if (age<10) kcalFactor=75; else if (age<14) kcalFactor=60; else kcalFactor=50;
     kcalLow = kcalFactor; kcalHigh = kcalFactor;
     clinicalNote = "คำนวณตาม ESPGHAN Pediatric";
+    kcalDriver = 'child';
   } else if (data.burn) {
     // ESPEN Burn 2013 (Nutritional therapy in major burns): energy tiered by %TBSA.
     // This is a simplified bedside estimate — indirect calorimetry or the Toronto equation
@@ -440,20 +442,25 @@ function process(data) {
     else if (tbsaVal >= 20) { kcalLow=35; kcalHigh=40; kcalFactor=37; }
     else { kcalLow=30; kcalHigh=35; kcalFactor=32; }
     clinicalNote = `Burn (TBSA ${tbsaVal}%): ประมาณ ${kcalLow}-${kcalHigh} kcal/kg (ค่าประมาณเบื้องต้น) — แนะนำ Indirect Calorimetry หรือ Toronto Equation หากทำได้ จำกัดกลูโคส ≤55% ของพลังงาน (ESPEN Burn 2013)`;
+    kcalDriver = 'burn';
   } else if (data.icu) {
     // ICU: เริ่มต้น 20 kcal/kg → เพิ่มได้ถึง 25 kcal/kg [ESPEN ICU 2023]
     kcalLow=20; kcalHigh=25; kcalFactor=20;
     clinicalNote = "ICU: เริ่ม 20 kcal/kg (permissive underfeeding) → ขยับ 25 หลัง stable";
+    kcalDriver = 'icu';
   } else if (data.cancer) {
     kcalLow=25; kcalHigh=30; kcalFactor=bmi>=25?25:30;
     clinicalNote = bmi>=25 ? "มะเร็ง + อ้วน (BMI≥25): ใช้ AdjBW × 25 kcal/kg" : "มะเร็ง BMI ปกติ: 30 kcal/kg";
+    kcalDriver = 'cancer';
   } else if (data.liver && data.liverStage==="cirrhosis") {
     kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:35;
     clinicalNote = "Cirrhosis: 30–35 kcal/kg หลีกเลี่ยง Overfeeding";
+    kcalDriver = 'cirrhosis';
   } else if (data.pressureInjury) {
     // EPUAP/NPIAP/PPPIA 2019 (Pressure Injury): 30-35 kcal/kg สำหรับผู้ป่วยที่มีความเสี่ยง/เป็นแผลกดทับ
     kcalLow=30; kcalHigh=35; kcalFactor=bmi>=25?30:32;
     clinicalNote = `แผลกดทับ Stage ${data.piStage||'1-2'}: 30–35 kcal/kg (EPUAP/NPIAP/PPPIA 2019) เสริมอาร์จินีน/สังกะสี/วิตามินซีช่วยการหายของแผล`;
+    kcalDriver = 'pressureInjury';
   } else if (data.surgery) {
     // ESPEN Surgery 2017/2021: 25-30 kcal/kg เป็นค่าตั้งต้น แต่ต้องปรับตามอายุ/BMI
     // เช่นเดียวกับเงื่อนไขอื่น (cancer, cirrhosis) เพื่อไม่ให้ผู้ป่วยผ่าตัดได้พลังงานต่ำกว่าเกณฑ์พื้นฐานที่ควรได้รับ
@@ -462,43 +469,47 @@ function process(data) {
       // อ้วน+ผ่าตัด: ยังต้องป้องกัน Overfeeding เหมือนหลักการทั่วไป ใช้ AdjBW + 20-25 kcal/kg
       kcalLow=20; kcalHigh=25; kcalFactor=22;
       clinicalNote = `${surgLabel} + อ้วน (BMI≥25): ใช้ AdjBW × 20–25 kcal/kg ป้องกัน Overfeeding (ESPEN Surgery + Thai CPG 2568)`;
+      kcalDriver = 'surgery-obese';
     } else if (age >= 60) {
       // ผู้สูงอายุ+ผ่าตัด: ความเครียดจากการผ่าตัดร่วมกับอายุ ต้องการพลังงานไม่น้อยกว่าเกณฑ์ผู้สูงอายุทั่วไป
       kcalLow=28; kcalHigh=32; kcalFactor=30;
       clinicalNote = `${surgLabel} + ผู้สูงอายุ: 28–32 kcal/kg (ESPEN Surgery + ESPEN Geriatric) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS`;
+      kcalDriver = 'surgery-elderly';
     } else {
       kcalLow=25; kcalHigh=30; kcalFactor=27;
       clinicalNote = `${surgLabel}: 25–30 kcal/kg (ESPEN Surgery) เริ่มอาหารทางปาก/ทางสายให้เร็วที่สุดหลังผ่าตัดตามหลัก ERAS`;
+      kcalDriver = 'surgery-general';
     }
   } else if (data.infection) {
     kcalLow=25; kcalHigh=30; kcalFactor=30;
     clinicalNote = "ติดเชื้อ: 25–30 kcal/kg ตาม ESPEN Polymorbid";
+    kcalDriver = 'infection';
   } else if (bmi < 18.5) {
     // Underweight: เพิ่มพลังงาน แต่ระวัง Refeeding Syndrome
     kcalLow=30; kcalHigh=35; kcalFactor=35;
     clinicalNote = "น้ำหนักน้อย: เริ่ม 30 kcal/kg ระวัง Refeeding Syndrome";
+    kcalDriver = 'underweight';
   } else if (bmi >= 25.0) {
     // Thai CPG 2568: BMI ≥25 = อ้วน → ใช้ AdjBW + 20–25 kcal/kg (ESPEN) ป้องกัน Overfeeding
     // ต้องเช็คก่อนเกณฑ์ผู้สูงอายุเสมอ (เช่นเดียวกับ surgery/cancer/cirrhosis/pressure injury) เพราะถ้าปล่อยให้
     // เกณฑ์ผู้สูงอายุ (28-30 kcal/kg) มาก่อน ผู้สูงอายุที่อ้วนจะได้พลังงานสูงเกินไป ขัดกับหลักป้องกัน Overfeeding
     const elderlyPrefix = age>=60 ? "ผู้สูงอายุ + " : "";
-    if (data.icu || data.infection) {
-      kcalLow=20; kcalHigh=22; kcalFactor=20;
-      clinicalNote = `${elderlyPrefix}อ้วน + ภาวะเฉียบพลัน (Thai BMI≥25): AdjBW × 20–22 kcal/kg`;
-    } else {
-      kcalLow=20; kcalHigh=25; kcalFactor=22;
-      clinicalNote = `${elderlyPrefix}อ้วน (Thai CPG 2568, BMI≥25): ใช้ AdjBW × 20–25 kcal/kg [ESPEN] ป้องกัน Overfeeding`;
-    }
+    kcalLow=20; kcalHigh=25; kcalFactor=22;
+    clinicalNote = `${elderlyPrefix}อ้วน (Thai CPG 2568, BMI≥25): ใช้ AdjBW × 20–25 kcal/kg [ESPEN] ป้องกัน Overfeeding`;
+    kcalDriver = 'obesity';
   } else if (age >= 60) {
     kcalLow=28; kcalHigh=30; kcalFactor=30;
     clinicalNote = "ผู้สูงอายุ: 28–30 kcal/kg ตาม ESPEN Geriatric 2022";
+    kcalDriver = 'elderly';
   } else if (data.liver && data.liverStage==="nafld") {
     kcalLow=20; kcalHigh=25; kcalFactor=25;
     clinicalNote = "NAFLD/NASH: ลดพลังงาน 500–750 kcal/วัน จากปกติ";
+    kcalDriver = 'nafld';
   } else {
     // Normal BMI (18.5–24.9)
     kcalLow=25; kcalHigh=30; kcalFactor=25;
     clinicalNote = "BMI ปกติ: 25–30 kcal/kg ตาม ESPEN General";
+    kcalDriver = 'general';
   }
 
   const kcal = Math.round(usedWeight * kcalFactor);
@@ -562,11 +573,12 @@ function process(data) {
   else if (data.surgery) guidelineSource = (data.surgeryType==="major" && bmi>=25.0) ? "ESPEN Surgery 2017/2021 + ASPEN Obesity Guideline" : "ESPEN Surgery 2017/2021";
   else if (data.infection) guidelineSource="ESPEN Polymorbid 2023";
   else if (data.dm) guidelineSource="ADA Standards of Care 2025";
+  else if (bmi < 18.5) guidelineSource="ESPEN General (Underweight/Refeeding Precaution)";
   else if (bmi>=25.0) guidelineSource="Thai Obesity CPG พ.ศ.2568 + ESPEN 20–25 kcal/kg";
   else if (age>=60) guidelineSource="ESPEN Geriatric 2022";
 
   const ex = calculateExchangesLogic(kcal,protein,data.dm,ckdStage,data.dialysis,data.liver,data.liverStage,data.cancer,data.icu,data.infection);
-  const advice = generateAdvice(data,bmi,ckdStage,isChild,age);
+  const advice = generateAdvice(data,bmi,ckdStage,isChild,age,kcalDriver);
   const mealPlan = generateMealPlan(ex,data);
   const weekPlan = generate7DayPlan(ex,data);
 
@@ -692,7 +704,7 @@ function calculateExchangesLogic(kcal, protein, isDM, ckdStage, isDialysis, isLi
 }
 
 // ===== ADVICE =====
-function generateAdvice(data, bmi, ckdStage, isChild, age) {
+function generateAdvice(data, bmi, ckdStage, isChild, age, kcalDriver) {
   let a = [];
   if (isChild) a.push("คำนวณตามเกณฑ์โภชนาการเด็ก ESPGHAN");
   if (data.dm) a.push("ADA 2025: ควบคุมน้ำตาล เน้น low-GI ลดแป้งขัดสี เพิ่มใยอาหาร ≥14g/1000kcal");
@@ -741,13 +753,16 @@ function generateAdvice(data, bmi, ckdStage, isChild, age) {
   }
   if (data.liver && data.liverStage==="cirrhosis") a.push("โปรตีน 1.2 g/kg ไม่จำกัดแม้มี HE");
   if (data.liver && data.liverStage==="nafld") a.push("ลดน้ำหนัก 5-10% ลดไขมัน ลดน้ำตาล");
-  if (data.infection) a.push("เพิ่มพลังงาน 30 kcal และโปรตีน 1.5 g/kg");
-  if (bmi < 18.5) a.push("เพิ่มอาหารว่าง นม พลังงาน 35 kcal/kg");
+  if (kcalDriver === 'infection') a.push("ติดเชื้อ: เพิ่มพลังงาน 25–30 kcal/kg และโปรตีน 1.5 g/kg (ESPEN Polymorbid 2023)");
+  if (kcalDriver === 'underweight') a.push("น้ำหนักน้อย: เพิ่มอาหารว่าง นม พลังงาน 30–35 kcal/kg ระวัง Refeeding Syndrome");
   if (bmi >= 23 && bmi < 25) a.push("น้ำหนักเกิน At Risk (Thai CPG: BMI 23–24.9): ระวังความเสี่ยงโรคเรื้อรัง ควบคุมพลังงาน");
-  if (!isChild && bmi >= 25) a.push("โรคอ้วน (Thai CPG 2568: BMI≥25): ใช้ AdjBW คำนวณ 20–25 kcal/kg ป้องกัน Overfeeding");
-  if (isChild && bmi >= 25) a.push("เด็กอ้วน: ใช้ IBW คำนวณพลังงานตาม ESPGHAN");
-  if (age >= 60 && bmi >= 25.0) a.push("ผู้สูงอายุ + อ้วน: ใช้เกณฑ์ป้องกัน Overfeeding ข้างต้น (AdjBW × 20–25 kcal/kg) แทนเกณฑ์ผู้สูงอายุทั่วไป (28–30 kcal/kg) แต่โปรตีนยังคงหลักการผู้สูงอายุที่ 1.2 g/kg");
-  else if (age >= 60) a.push("ผู้สูงอายุ: พลังงาน 28–30 kcal/kg โปรตีน 1.2 g/kg (ESPEN Geriatric 2022)");
+  if (kcalDriver === 'child' && bmi >= 25) a.push("เด็กอ้วน: ใช้ IBW คำนวณพลังงานตาม ESPGHAN");
+  if (kcalDriver === 'obesity') {
+    a.push("โรคอ้วน (Thai CPG 2568: BMI≥25): ใช้ AdjBW คำนวณ 20–25 kcal/kg ป้องกัน Overfeeding" +
+      (age>=60 ? " — ผู้สูงอายุที่อ้วนใช้เกณฑ์นี้แทนเกณฑ์ผู้สูงอายุทั่วไป (28–30 kcal/kg) แต่โปรตีนยังคงหลักการผู้สูงอายุ 1.2 g/kg" : ""));
+  } else if (kcalDriver === 'elderly') {
+    a.push("ผู้สูงอายุ: พลังงาน 28–30 kcal/kg โปรตีน 1.2 g/kg (ESPEN Geriatric 2022)");
+  }
   if (ckdStage>=3 && !data.dialysis) a.push("KDIGO 2024: เพิ่มอาหารจากพืช ลดเนื้อแดงและอาหารแปรรูป");
   if (data.dialysis) a.push("KDIGO 2024: เพิ่มโปรตีนจากพืช ร่วมกับสัตว์ เพื่อลด uremic toxin");
   return a;
